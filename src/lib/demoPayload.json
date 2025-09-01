@@ -1,0 +1,31 @@
+{
+  "truth_score": 7,
+  "bias_patterns": ["loaded language", "selective framing"],
+  "missing_angles": ["expert counter-opinions not cited", "regional impact omitted"],
+  "citations": [
+    "https://www.reuters.com/world/example-story-2025-08-15/",
+    "https://apnews.com/article/example-article-2025",
+    "https://www.bbc.co.uk/news/world-example-123456",
+    "https://www.nytimes.com/2025/08/15/world/example-news.html",
+    "https://www.politico.com/news/2025/08/15/example-headline-00123456",
+    "https://www.spiegel.de/politik/example-article-a-123456.html",
+    "https://elpais.com/internacional/2025-08-15/example.html"
+  ],
+  "sources": [
+    { "url": "https://www.reuters.com/world/example-story-2025-08-15/", "outlet": "Reuters" },
+    { "url": "https://apnews.com/article/example-article-2025", "outlet": "Associated Press" },
+    { "url": "https://www.bbc.co.uk/news/world-example-123456", "outlet": "BBC News" },
+    { "url": "https://www.nytimes.com/2025/08/15/world/example-news.html", "outlet": "New York Times" },
+    { "url": "https://www.politico.com/news/2025/08/15/example-headline-00123456", "outlet": "Politico" },
+    { "url": "https://www.spiegel.de/politik/example-article-a-123456.html", "outlet": "Der Spiegel" },
+    { "url": "https://elpais.com/internacional/2025-08-15/example.html", "outlet": "El País" }
+  ],
+  "summary": "This demo article highlights a global policy debate. The reporting is fact-based but shows signs of loaded language and selective framing. While Reuters and AP provide neutral accounts, BBC and NYTimes include interpretive angles. Politico emphasizes political stakes, while Der Spiegel and El País provide valuable international context. The piece would benefit from more expert counter-opinions and regional impact analysis.",
+  "confidence_level": 0.82,
+  "manipulation_tactics": ["appeal to fear", "oversimplification"],
+  "fact_check_results": [
+    { "claim": "The policy would reduce emissions by 40% by 2030", "verdict": "misleading", "evidence": "Projections are based on optimistic assumptions without peer-review" },
+    { "claim": "Experts unanimously support the measure", "verdict": "false", "evidence": "Multiple experts have voiced reservations in neutral outlets" }
+  ]
+}
+
