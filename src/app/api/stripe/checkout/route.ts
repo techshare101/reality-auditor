@@ -161,8 +161,7 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             { 
               error: 'Invalid pricing configuration',
-              details: error.message,
-              priceId: body.priceId 
+              details: error.message
             },
             { status: 400 }
           );
