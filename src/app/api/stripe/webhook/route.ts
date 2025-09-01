@@ -79,8 +79,8 @@ export async function POST(request: NextRequest) {
 
         const now = new Date();
         const monthStart = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0, 0));
-        const currentPeriodEnd = subscription?.current_period_end 
-          ? new Date(subscription.current_period_end * 1000)
+        const currentPeriodEnd = (subscription as any)?.current_period_end 
+          ? new Date((subscription as any).current_period_end * 1000)
           : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
 
         // Update Firestore subscription document
@@ -136,7 +136,7 @@ export async function POST(request: NextRequest) {
         // Update subscription status
         await doc.ref.update({
           status: subscription.status,
-          currentPeriodEnd: Timestamp.fromDate(new Date(subscription.current_period_end * 1000)),
+          currentPeriodEnd: Timestamp.fromDate(new Date((subscription as any).current_period_end * 1000)),
           updatedAt: Timestamp.now(),
         });
 

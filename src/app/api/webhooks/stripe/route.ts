@@ -1,8 +1,38 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe } from '@/lib/stripeClient';
 import { headers } from 'next/headers';
 import { db } from '@/lib/firebase-admin';
 import { sendUsageResetEmail } from '@/lib/email';
+import type { Stripe } from 'stripe';
+
+// Helper functions
+function getSubscriptionPeriodEnd(subscription: any): Date {
+  if (subscription?.current_period_end) {
+    return new Date(subscription.current_period_end * 1000);
+  }
+  // Default to end of current month
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
+}
+
+function getPlanFromPriceId(priceId: string): string {
+  const priceMap: Record<string, string> = {
+    [process.env.NEXT_PUBLIC_STRIPE_BASIC_PRICE_ID || '']: 'basic',
+    [process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || '']: 'pro',
+    [process.env.NEXT_PUBLIC_STRIPE_TEAM_PRICE_ID || '']: 'team',
+  };
+  return priceMap[priceId] || 'basic';
+}
+
+function getAuditLimitForPlan(plan: string): number {
+  const limits: Record<string, number> = {
+    free: 5,
+    basic: 30,
+    pro: 100,
+    team: 500,
+  };
+  return limits[plan] || 5;
+}
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -16,6 +46,7 @@ export async function POST(req: NextRequest) {
   }
 
   let event;
+  const stripe = getStripe();
 
   try {
     event = stripe.webhooks.constructEvent(
@@ -61,8 +92,8 @@ export async function POST(req: NextRequest) {
       }
 
       case 'customer.subscription.updated': {
-        const subscription = event.data.object;
-        console.log('📝 Subscription updated:', subscription.id);
+        const subscription = event.data.object as any; // Type assertion for flexibility
+        console.log('🔄 Subscription updated:', subscription.id);
         
         // Handle subscription changes (upgrade/downgrade, billing cycle changes)
         await handleSubscriptionUpdated(subscription);
@@ -132,20 +163,22 @@ async function handleSubscriptionCreated({
     
     if (!usersSnapshot.empty) {
       const userId = usersSnapshot.docs[0].id;
+      const stripe = getStripe();
       const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
         expand: ['items.data.price.product']
-      });
+      }) as any; // Type assertion to handle Stripe typing issues
       
       const priceId = subscription.items.data[0]?.price.id;
       const plan = getPlanFromPriceId(priceId);
       const auditLimit = getAuditLimitForPlan(plan);
+      const periodEnd = getSubscriptionPeriodEnd(subscription);
       
       // Update subscription data
       await db.collection('subscriptions').doc(userId).update({
         stripeSubscriptionId: subscriptionId,
         plan,
         status: 'active',
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodEnd: periodEnd,
         updatedAt: new Date()
       });
       
@@ -174,15 +207,16 @@ async function handleSubscriptionUpdated(subscription: any) {
     
     if (!usersSnapshot.empty) {
       const userId = usersSnapshot.docs[0].id;
-      const priceId = subscription.items.data[0]?.price.id;
+      const priceId = subscription.items?.data[0]?.price?.id;
       const plan = getPlanFromPriceId(priceId);
       const auditLimit = getAuditLimitForPlan(plan);
+      const periodEnd = getSubscriptionPeriodEnd(subscription);
       
       // Update subscription data
       await db.collection('subscriptions').doc(userId).update({
         plan,
         status: subscription.status,
-        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        currentPeriodEnd: periodEnd,
         updatedAt: new Date()
       });
       
@@ -269,23 +303,3 @@ async function handleUsageReset(invoice: any) {
   }
 }
 
-// Helper function to map Stripe price IDs to plan names
-function getPlanFromPriceId(priceId: string): string {
-  const priceMap: Record<string, string> = {
-    [process.env.NEXT_PUBLIC_STRIPE_BASIC_PRICE_ID || '']: 'basic',
-    [process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || '']: 'pro',
-    [process.env.NEXT_PUBLIC_STRIPE_TEAM_PRICE_ID || '']: 'team',
-  };
-  return priceMap[priceId] || 'basic';
-}
-
-// Helper function to get audit limits for each plan
-function getAuditLimitForPlan(plan: string): number {
-  const limits: Record<string, number> = {
-    free: 5,
-    basic: 30,
-    pro: 100,
-    team: 500,
-  };
-  return limits[plan] || 5;
-}
