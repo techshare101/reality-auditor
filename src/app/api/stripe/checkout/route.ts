@@ -147,17 +147,43 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('❌ Checkout session error:', error);
     
+    // More detailed error handling
+    let errorMessage = 'Failed to create checkout session';
+    let errorDetails = '';
+    
     if (error instanceof Error) {
-      if (error.message.includes('price')) {
-        return NextResponse.json(
-          { error: 'Invalid pricing configuration' },
-          { status: 400 }
-        );
+      errorMessage = error.message;
+      errorDetails = error.stack || '';
+      
+      // Specific Stripe error handling
+      if ('type' in error && error.type === 'StripeInvalidRequestError') {
+        if (error.message.includes('price')) {
+          return NextResponse.json(
+            { 
+              error: 'Invalid pricing configuration',
+              details: error.message,
+              priceId: body.priceId 
+            },
+            { status: 400 }
+          );
+        }
       }
+      
+      // Log full error details
+      console.error('Full error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        type: 'type' in error ? error.type : 'unknown',
+        code: 'code' in error ? error.code : 'unknown',
+      });
     }
 
     return NextResponse.json(
-      { error: 'Failed to create checkout session' },
+      { 
+        error: errorMessage,
+        details: process.env.NODE_ENV === 'development' ? errorDetails : 'Check server logs for details'
+      },
       { status: 500 }
     );
   }

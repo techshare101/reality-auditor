@@ -250,14 +250,26 @@ export default function SubscriptionCards() {
         console.error(`❌ Checkout failed with status ${response.status}:`, errorText);
         
         let errorMessage = 'Failed to start checkout. Please try again.';
+        let errorDetails = '';
         try {
           const errorData = JSON.parse(errorText);
           if (errorData.error) {
             errorMessage = errorData.error;
+            if (errorData.details) {
+              errorDetails = errorData.details;
+              console.error('Checkout error details:', errorDetails);
+            }
+            if (errorData.priceId) {
+              console.error('Price ID that failed:', errorData.priceId);
+            }
           }
         } catch (e) {
           // errorText is not JSON, use as-is
+          console.error('Non-JSON error response:', errorText);
         }
+        
+        // Show full error in console for debugging
+        console.error('Full checkout error:', { errorMessage, errorDetails, status: response.status });
         
         alert(errorMessage);
       }
