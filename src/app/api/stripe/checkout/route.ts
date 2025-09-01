@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/firebase-admin';
 import { db } from '@/lib/firebase-admin';
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-08-27.basil',
-});
+import { stripe } from '@/lib/stripe';
 
 // Plan mapping with your actual Stripe Price IDs
 const PRICE_PLANS: Record<string, string> = {
@@ -132,6 +128,11 @@ export async function POST(request: NextRequest) {
         plan: priceId,
       },
     };
+
+    if (!process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_TEST_SECRET_KEY) {
+      console.error('❌ Stripe secret key not configured');
+      return NextResponse.json({ error: 'Stripe not configured on server' }, { status: 500 });
+    }
 
     const session = await stripe.checkout.sessions.create(sessionConfig);
 

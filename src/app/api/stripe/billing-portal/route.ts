@@ -1,9 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import Stripe from 'stripe';
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-08-27.basil',
-});
+import { stripe } from '@/lib/stripe';
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,7 +29,8 @@ export async function POST(request: NextRequest) {
       // Decode Firebase JWT token to get email
       const tokenParts = idToken.split('.');
       if (tokenParts.length === 3) {
-        const payload = JSON.parse(atob(tokenParts[1]));
+        const payloadJson = Buffer.from(tokenParts[1], 'base64').toString('utf8');
+        const payload = JSON.parse(payloadJson);
         userEmail = payload.email;
         console.log(`🔑 User email from token: ${userEmail}`);
       }
@@ -53,6 +50,11 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🏦️ Looking up Stripe customer for: ${userEmail}`);
+
+    if (!process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_TEST_SECRET_KEY) {
+      console.error('❌ Stripe secret key not configured');
+      return NextResponse.json({ error: 'Stripe not configured on server' }, { status: 500 });
+    }
 
     // Look up existing Stripe customer by email
     const customers = await stripe.customers.list({ 

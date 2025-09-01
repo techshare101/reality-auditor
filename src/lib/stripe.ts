@@ -2,8 +2,14 @@ import Stripe from 'stripe';
 import { loadStripe } from '@stripe/stripe-js';
 
 // Server-side Stripe instance
-export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2025-08-27.basil',
+const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY;
+if (!STRIPE_KEY) {
+  // eslint-disable-next-line no-console
+  console.warn('⚠️ STRIPE_SECRET_KEY not set. Stripe features will fail until configured.');
+}
+
+export const stripe = new Stripe(STRIPE_KEY || 'sk_test_placeholder', {
+  apiVersion: '2024-06-20',
   typescript: true,
 });
 
