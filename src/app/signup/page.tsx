@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import Link from "next/link";
@@ -8,7 +8,8 @@ import { Eye, EyeOff, ArrowLeft, Sparkles, Shield, TrendingUp } from "lucide-rea
 import { useAuth } from "@/contexts/AuthContext";
 import MarketingLayout from "@/components/MarketingLayout";
 
-export default function SignupPage() {
+// Separate component that uses useSearchParams
+function SignupClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, signUp } = useAuth();
@@ -249,5 +250,25 @@ export default function SignupPage() {
         </motion.div>
       </div>
     </MarketingLayout>
+  );
+}
+
+// Main component with Suspense boundary
+export default function SignupPage() {
+  return (
+    <Suspense 
+      fallback={
+        <MarketingLayout title="Sign Up - Reality Auditor" showBackToDashboard={false}>
+          <div className="min-h-screen flex items-center justify-center">
+            <div className="text-center">
+              <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+              <p className="text-xl text-white/70">Loading signup...</p>
+            </div>
+          </div>
+        </MarketingLayout>
+      }
+    >
+      <SignupClient />
+    </Suspense>
   );
 }
