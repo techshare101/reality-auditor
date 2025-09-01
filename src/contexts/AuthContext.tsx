@@ -115,6 +115,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const logout = async () => {
     await signOut(auth);
+    // Clear all local storage to prevent ghost data
+    localStorage.clear();
+    sessionStorage.clear();
+    console.log('🧽 Cleared local storage on logout');
   };
 
   const value = {
@@ -128,27 +132,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider value={value}>
-      {loading ? (
-        <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-950 flex items-center justify-center">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 animate-pulse" />
-            <p className="text-gray-400 animate-pulse">Loading Reality Auditor...</p>
-            {error && (
-              <div className="mt-4 p-4 bg-red-500/10 border border-red-500/20 rounded-lg max-w-md mx-auto">
-                <p className="text-red-400 text-sm">Error: {error}</p>
-                <button 
-                  onClick={() => window.location.reload()} 
-                  className="mt-2 px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded transition-colors text-sm"
-                >
-                  Reload Page
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      ) : (
-        children
-      )}
+      {children}
     </AuthContext.Provider>
   );
 }

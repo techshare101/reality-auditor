@@ -1,70 +1,95 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 
-const AUDIT_COUNT_KEY = "realityauditor:auditCount";
-const LAST_RESET_KEY = "realityauditor:lastReset";
-
-export function useAuditLimit(limit: number = 5) {
+export function useAuditLimit(defaultLimit: number = 5) {
   const { user } = useAuth();
   const [count, setCount] = useState(0);
-  const [lastReset, setLastReset] = useState<string | null>(null);
+  const [limit, setLimit] = useState(defaultLimit);
+  const [hasPaidSubscription, setHasPaidSubscription] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Get the current month key (YYYY-MM)
-  const getCurrentMonthKey = () => {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  };
-
-  // Load count from localStorage
+  // Load count and limit from Firestore subscription document
   useEffect(() => {
-    const storedCount = localStorage.getItem(AUDIT_COUNT_KEY);
-    const storedReset = localStorage.getItem(LAST_RESET_KEY);
-    const currentMonth = getCurrentMonthKey();
-
-    // Reset if it's a new month
-    if (storedReset !== currentMonth) {
-      localStorage.setItem(AUDIT_COUNT_KEY, "0");
-      localStorage.setItem(LAST_RESET_KEY, currentMonth);
-      setCount(0);
-      setLastReset(currentMonth);
-      console.log("🔄 Monthly audit count reset");
-    } else {
-      setCount(storedCount ? parseInt(storedCount, 10) : 0);
-      setLastReset(storedReset);
+    if (!user) {
+      setLoading(false);
+      return;
     }
-  }, []);
 
-  // Increment the count
+    const unsubscribe = onSnapshot(
+      doc(db, "subscriptions", user.uid),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.data();
+          const usage = data.usage || 0;
+          const planLimit = data.limit || defaultLimit;
+          const planType = data.plan || 'free';
+          
+          setCount(usage);
+          setLimit(planLimit);
+          setHasPaidSubscription(planType !== 'free');
+          
+          console.log(`🔄 Firestore audit count updated: ${usage}/${planLimit} (${planType} plan)`);
+        } else {
+          // No subscription document exists, use defaults
+          setCount(0);
+          setLimit(defaultLimit);
+          setHasPaidSubscription(false);
+          console.log(`📝 No subscription document found, using defaults: 0/${defaultLimit}`);
+        }
+        setLoading(false);
+      },
+      (error) => {
+        console.error("❌ Error listening to subscription document:", error);
+        // Fallback to defaults on error
+        setCount(0);
+        setLimit(defaultLimit);
+        setHasPaidSubscription(false);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user, defaultLimit]);
+
+  // Increment is now handled by the backend, so this is just for compatibility
   const increment = useCallback(() => {
-    const newCount = count + 1;
-    setCount(newCount);
-    localStorage.setItem(AUDIT_COUNT_KEY, newCount.toString());
-    console.log(`📈 Local audit count: ${newCount}/${limit}`);
-    return newCount;
-  }, [count, limit]);
+    // The actual increment happens in the backend when an audit is completed
+    // This function exists for backward compatibility
+    console.log(`📈 Increment called, but actual update happens in backend`);
+    return count + 1;
+  }, [count]);
 
-  // Force reset (for testing or after upgrade)
-  const reset = useCallback(() => {
-    setCount(0);
-    const currentMonth = getCurrentMonthKey();
-    localStorage.setItem(AUDIT_COUNT_KEY, "0");
-    localStorage.setItem(LAST_RESET_KEY, currentMonth);
-    setLastReset(currentMonth);
-    console.log("🔄 Audit count manually reset");
-  }, []);
-
-  // Check if user has a paid subscription (bypass limit)
-  const hasPaidPlan = useCallback(() => {
-    // This will be updated when subscription status is properly loaded
-    // For now, we'll just check if user exists and trust the backend
-    return false; // Force everyone through the limit for safety
+  // Reset function (mainly for testing)
+  const reset = useCallback(async () => {
+    if (!user) return;
+    
+    try {
+      const token = await user.getIdToken();
+      await fetch('/api/reset-usage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("🔄 Usage reset via API");
+    } catch (error) {
+      console.error("❌ Error resetting usage:", error);
+    }
   }, [user]);
 
-  const isOverLimit = count >= limit && !hasPaidPlan();
+  // Check if user has a paid subscription
+  const hasPaidPlan = useCallback(() => {
+    return hasPaidSubscription;
+  }, [hasPaidSubscription]);
+
+  const isOverLimit = count >= limit && !hasPaidSubscription;
   const remaining = Math.max(0, limit - count);
-  const percentUsed = (count / limit) * 100;
+  const percentUsed = limit > 0 ? (count / limit) * 100 : 0;
 
   return {
     count,
@@ -75,6 +100,7 @@ export function useAuditLimit(limit: number = 5) {
     reset,
     isOverLimit,
     canAudit: !isOverLimit,
-    hasPaidPlan: hasPaidPlan()
+    hasPaidPlan: hasPaidPlan(),
+    loading
   };
 }

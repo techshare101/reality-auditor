@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import InfoModal from "@/components/InfoModal";
 import { motion } from "framer-motion";
 import { Eye, Sparkles, TrendingUp, Search, AlertTriangle, CheckCircle } from "lucide-react";
+import InfoModal from "@/components/InfoModal";
 import ComparisonTable from "@/components/ComparisonTable";
 
 export default function LandingPage() {

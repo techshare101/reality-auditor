@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db as clientDb } from '@/lib/firebase';
@@ -55,7 +55,7 @@ function getPlanDisplayName(planType: string): string {
   }
 }
 
-export default function SubscriptionCards() {
+const SubscriptionCards = React.memo(function SubscriptionCards() {
   const { user } = useAuth();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -111,8 +111,21 @@ export default function SubscriptionCards() {
       }
     };
     
+    // Also listen for custom events for same-window updates
+    const handleAuditCompleted = () => {
+      console.log('🔄 Audit completed event detected, refreshing subscription data...');
+      setTimeout(() => {
+        refreshSubscriptionData();
+      }, 1000); // Small delay to ensure backend has updated
+    };
+    
     window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    window.addEventListener('audit-completed', handleAuditCompleted as any);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('audit-completed', handleAuditCompleted as any);
+    };
   }, []);
 
   const refreshSubscriptionData = async () => {
@@ -608,4 +621,6 @@ export default function SubscriptionCards() {
       )}
     </div>
   );
-}
+});
+
+export default SubscriptionCards;

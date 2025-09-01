@@ -1,11 +1,78 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, Mail, Lock, Loader2, AlertCircle } from "lucide-react";
+
+// Particle component that's safe for SSR
+const Particle = ({ index }: { index: number }) => {
+  const [mounted, setMounted] = useState(false);
+  const [particleData, setParticleData] = useState({
+    x: [0, 0],
+    y: [0, 0],
+    left: 0,
+    top: 0,
+    duration: 20
+  });
+
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== 'undefined') {
+      setParticleData({
+        x: [Math.random() * window.innerWidth, Math.random() * window.innerWidth],
+        y: [Math.random() * window.innerHeight, Math.random() * window.innerHeight],
+        left: Math.random() * 100,
+        top: Math.random() * 100,
+        duration: Math.random() * 15 + 15
+      });
+    }
+  }, []);
+
+  if (!mounted) return null;
+
+  return (
+    <motion.div
+      className="absolute w-1 h-1 bg-indigo-400/20 rounded-full"
+      animate={{
+        x: particleData.x,
+        y: particleData.y,
+      }}
+      transition={{
+        repeat: Infinity,
+        duration: particleData.duration,
+        ease: "linear",
+      }}
+      style={{
+        left: `${particleData.left}%`,
+        top: `${particleData.top}%`,
+      }}
+    />
+  );
+};
+
+// Particles container that only renders on client
+const ParticlesBackground = () => {
+  const [isClient, setIsClient] = useState(false);
+
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  if (!isClient) {
+    return null;
+  }
+
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {[...Array(12)].map((_, i) => (
+        <Particle key={i} index={i} />
+      ))}
+    </div>
+  );
+};
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -52,27 +119,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
       {/* Background particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        {[...Array(12)].map((_, i) => (
-          <motion.div
-            key={i}
-            className="absolute w-1 h-1 bg-indigo-400/20 rounded-full"
-            animate={{
-              y: [Math.random() * window.innerHeight, Math.random() * window.innerHeight],
-              x: [Math.random() * window.innerWidth, Math.random() * window.innerWidth],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: Math.random() * 15 + 15,
-              ease: "linear",
-            }}
-            style={{
-              left: Math.random() * 100 + "%",
-              top: Math.random() * 100 + "%",
-            }}
-          />
-        ))}
-      </div>
+      <ParticlesBackground />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

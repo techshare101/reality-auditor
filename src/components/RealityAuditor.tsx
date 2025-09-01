@@ -37,7 +37,7 @@ import CollapsibleText from "@/components/CollapsibleText";
 import ArticleContentCard from "@/components/ArticleContentCard";
 import { useAuditCache } from "@/lib/useAuditCache";
 import { useAuth } from "@/contexts/AuthContext";
-import { useAuditLimit } from "@/hooks/useAuditLimit";
+import { useHybridAuditLimit } from "@/hooks/useHybridAuditLimit";
 import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outlets";
 import { getWarningLevel, getDynamicWarnings } from '@/lib/warnings';
 import { 
@@ -162,7 +162,7 @@ function getTruthScoreGradient(score: number): string {
 
 export default function RealityAuditorApp({ initialData, demoMode }: { initialData?: any; demoMode?: boolean }) {
   const { user } = useAuth();
-  const { count: auditCount, increment: incrementAuditCount, isOverLimit, remaining } = useAuditLimit(5);
+  const { count: auditCount, isOverLimit, remaining, hasPaidPlan, increment: incrementUsage } = useHybridAuditLimit(5);
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [metadata, setMetadata] = useState({
@@ -368,9 +368,15 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
       setProgress(100);
       setCurrentStep("Complete!");
 
-      // Increment local audit count on successful audit
-      incrementAuditCount();
-      console.log(`✅ Audit complete. New count: ${auditCount + 1}/5`);
+      // Backend now handles the audit count increment automatically
+      console.log(`✅ Audit complete. Backend will update count automatically.`);
+      console.log(`📊 Current count: ${auditCount}/5 (will update via Firestore listener)`);
+      
+      // If result shows successful non-cached audit, increment local counter for hybrid hook
+      if (result.cache_status === 'miss' && user) {
+        incrementUsage();
+        console.log('📈 Incremented local usage counter');
+      }
 
       // Save to local cache (last 5)
       try {
@@ -455,6 +461,46 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
             </div>
           </div>
         </motion.div>
+
+        {/* Audit Count Display */}
+        {(!user || !hasPaidPlan) && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.15, duration: 0.6 }}
+            className="flex justify-center mb-6"
+          >
+            <div className="inline-flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-xl">
+              <div className="flex items-center gap-2">
+                <Zap className="w-5 h-5 text-amber-400" />
+                <span className="text-white/80 font-medium">
+                  Free Audits Used: <span className="text-white font-bold">{auditCount}/5</span>
+                </span>
+              </div>
+              <div className="h-2 w-32 bg-white/20 rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${(auditCount / 5) * 100}%` }}
+                  transition={{ duration: 0.5, ease: "easeOut" }}
+                  className={`h-full rounded-full ${
+                    auditCount >= 5 ? 'bg-red-500' : 
+                    auditCount >= 3 ? 'bg-amber-500' : 
+                    'bg-green-500'
+                  }`}
+                />
+              </div>
+              {auditCount < 5 ? (
+                <span className="text-sm text-white/60">
+                  {remaining} remaining this month
+                </span>
+              ) : (
+                <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
+                  Limit Reached
+                </Badge>
+              )}
+            </div>
+          </motion.div>
+        )}
 
         {/* Input Panel */}
         <motion.div 

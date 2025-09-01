@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { AuditRequestSchema, RealityAuditSchema } from "@/lib/schemas";
 import { getCitations, getFactCheckSources } from "@/lib/tavily";
 import { checkSubscriptionStatus, incrementUsage } from "@/lib/subscription-checker";
-import { incrementUserUsage } from "@/lib/usage";
-import { checkAndIncrementUsage } from "@/utils/auditCountHelper";
-import { auth } from "@/lib/firebase-admin";
+import { auth, db } from "@/lib/firebase-admin";
 import { adjustTruthScore, buildRefinedSummary, getTrustBadge, buildTransparencyReport, calculateConfidenceLevel } from "@/lib/scoring";
 import OpenAI from "openai";
 import { TavilyClient } from "tavily";
@@ -68,41 +66,46 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Check usage limits using Firestore if user is authenticated
+    // Check usage limits using subscription system if user is authenticated
     let usageInfo = null;
     if (userId) {
       console.log(`📊 Checking usage for ${userId}...`);
       
       try {
-        // Check and increment usage atomically
-        const usageResult = await checkAndIncrementUsage(userId);
+        // Check subscription status first
+        const subscriptionStatus = await checkSubscriptionStatus(userId);
+        console.log(`📊 Subscription status:`, {
+          isActive: subscriptionStatus.isActive,
+          auditsUsed: subscriptionStatus.auditsUsed,
+          auditsRemaining: subscriptionStatus.auditsRemaining,
+          planType: subscriptionStatus.planType
+        });
         
-        console.log(`📊 Usage check result:`, usageResult);
-        
-        if (!usageResult.allowed) {
-          const limitError = usageResult.plan === 'free'
+        if (!subscriptionStatus.isActive || subscriptionStatus.auditsRemaining <= 0) {
+          const limitError = subscriptionStatus.planType === 'free'
             ? "Free plan limit reached. Upgrade to continue."
             : "Usage limit exceeded";
             
           return NextResponse.json({
             error: limitError,
             details: {
-              plan: usageResult.plan,
-              auditsUsed: usageResult.auditsUsed,
-              auditsLimit: usageResult.auditsLimit,
-              remaining: 0,
+              plan: subscriptionStatus.planType,
+              auditsUsed: subscriptionStatus.auditsUsed,
+              auditsLimit: subscriptionStatus.auditsLimit,
+              remaining: subscriptionStatus.auditsRemaining,
               upgradeRequired: true
             }
           }, { status: 402 }); // 402 Payment Required
         }
         
+        // Increment usage after successful audit (will be called at the end)
         // Store usage info for response
         usageInfo = {
-          auditsUsed: usageResult.auditsUsed,
-          auditsRemaining: usageResult.remaining
+          auditsUsed: subscriptionStatus.auditsUsed,
+          auditsRemaining: subscriptionStatus.auditsRemaining
         };
         
-        console.log(`✅ Usage incremented successfully: ${usageResult.auditsUsed} used, ${usageResult.remaining} remaining`);
+        console.log(`✅ Usage check passed: ${subscriptionStatus.auditsUsed} used, ${subscriptionStatus.auditsRemaining} remaining`);
       } catch (usageError) {
         console.error(`❌ Usage check failed:`, usageError);
         // Allow audit to proceed but log the error
@@ -203,6 +206,7 @@ export async function POST(request: NextRequest) {
     if (cachedResult) {
       const processingTime = Date.now() - startTime;
       console.log(`⚡ Cache served in ${processingTime}ms`);
+      console.log(`🔔 IMPORTANT: Cache hit - usage will NOT be incremented for user ${userId || 'anonymous'}`);
 
       // Ensure sources exist in cached payload as well
       let ensuredSources = (cachedResult as any).sources as { url: string; outlet: string }[] | undefined;
@@ -227,6 +231,7 @@ export async function POST(request: NextRequest) {
             auditsUsed: subscriptionStatus.auditsUsed,
             auditsRemaining: subscriptionStatus.auditsRemaining,
           };
+          console.log(`📊 Current usage for cached response: ${subscriptionStatus.auditsUsed}/${subscriptionStatus.auditsLimit}`);
         } catch (usageError) {
           console.error('❌ Error getting usage for cache hit:', usageError);
         }
@@ -283,7 +288,19 @@ export async function POST(request: NextRequest) {
     };
     
     // Validate the core result against our schema (citations etc.)
-    const validatedResult = RealityAuditSchema.parse(resultWithWarnings);
+    // If validation fails due to citations, try again with empty citations
+    let validatedResult;
+    try {
+      validatedResult = RealityAuditSchema.parse(resultWithWarnings);
+    } catch (validationError) {
+      console.warn("⚠️ Initial validation failed, attempting with empty citations:", validationError);
+      // Try again with empty citations array
+      const resultWithEmptyCitations = {
+        ...resultWithWarnings,
+        citations: []
+      };
+      validatedResult = RealityAuditSchema.parse(resultWithEmptyCitations);
+    }
     
     // Apply scoring adjustments based on detected issues
     const adjustedScore = adjustTruthScore(validatedResult);
@@ -336,9 +353,65 @@ export async function POST(request: NextRequest) {
       console.log(`💾 Stored new audit in MEMORY cache with key: ${cacheKey}`);
     }
     
-    // Add usage info to response
-    if (usageInfo) {
+    // Save audit to Firestore
+    let auditId = null;
+    if (userId) {
+      try {
+        console.log(`💾 Saving audit to Firestore for user ${userId}...`);
+        const auditDoc = {
+          userId,
+          result: resultForCache,
+          url: url || null,
+          content: articleText.substring(0, 1000), // Store first 1000 chars for preview
+          metadata: metadata || {},
+          createdAt: new Date(),
+          cacheKey,
+          processing_time: Date.now() - startTime
+        };
+        
+        const docRef = await db.collection('audits').add(auditDoc);
+        auditId = docRef.id;
+        console.log(`✅ Audit saved to Firestore with ID: ${auditId}`);
+        
+        // Add the Firestore ID to the response
+        resultWithCache.id = auditId;
+      } catch (firestoreError) {
+        console.error(`❌ Failed to save audit to Firestore:`, firestoreError);
+        // Don't fail the request, just log the error
+      }
+    }
+    
+    // Increment usage count after successful audit
+    if (userId) {
+      try {
+        console.log(`📈 INCREMENTING USAGE for user ${userId} after successful NEW audit (not cached)`);
+        const incrementResult = await incrementUsage(userId);
+        console.log(`✅ Usage increment result:`, {
+          success: incrementResult.success,
+          previousUsage: incrementResult.newUsageCount - 1,
+          newUsage: incrementResult.newUsageCount,
+          remaining: incrementResult.auditsRemaining,
+          error: incrementResult.error
+        });
+        
+        // Update usage info in response with new counts
+        if (incrementResult.success) {
+          resultWithCache.usage = {
+            auditsUsed: incrementResult.newUsageCount,
+            auditsRemaining: incrementResult.auditsRemaining
+          };
+          console.log(`🎯 Final usage in response: ${incrementResult.newUsageCount} used, ${incrementResult.auditsRemaining} remaining`);
+        } else {
+          console.error(`❌ Usage increment failed:`, incrementResult.error);
+        }
+      } catch (incrementError) {
+        console.error(`❌ Failed to increment usage:`, incrementError);
+        // Don't fail the audit, just log the error
+      }
+    } else if (usageInfo) {
+      // For non-authenticated users, keep the original usage info
       resultWithCache.usage = usageInfo;
+      console.log(`👤 Anonymous user - no usage tracking`);
     }
     
     console.log("✅ Audit completed successfully");
@@ -413,6 +486,7 @@ Guidelines:
 - Missing angles: Note important perspectives, counterarguments, or context that's absent
 - Manipulation tactics: Detect emotional appeals, logical fallacies, misleading statistics, etc.
 - Fact checks: Verify key claims with specific evidence
+- Citations: MUST be an array of valid URLs only. If no external sources are provided or found, return an empty array []. Do NOT include placeholder text or descriptions.
 - Be objective and evidence-based in your analysis
 - Return ONLY valid JSON, no additional text`;
 
@@ -469,9 +543,19 @@ Provide your comprehensive analysis as valid JSON only.`;
     }
 
     // Ensure we always include the real citations from Tavily
+    // Filter out any non-URL citations that GPT might have generated
+    const gptCitations = (parsedResult.citations || []).filter((citation: string) => {
+      try {
+        new URL(citation);
+        return true;
+      } catch {
+        return false;
+      }
+    });
+    
     return {
       ...parsedResult,
-      citations: citations.length > 0 ? citations : (parsedResult.citations || []),
+      citations: citations.length > 0 ? citations : gptCitations,
       confidence_level: parsedResult.confidence_level || 0.75,
       truth_score: Math.max(0, Math.min(10, parsedResult.truth_score || 5)),
       bias_patterns: parsedResult.bias_patterns || [],
