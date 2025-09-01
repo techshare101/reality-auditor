@@ -10,7 +10,6 @@ import {
   BarChart, Activity, AlertCircle, Zap
 } from "lucide-react";
 import CollapsibleText from "./CollapsibleText";
-import ComparisonTable from "./ComparisonTable";
 
 interface AuditResultProps {
   data: any;
@@ -330,11 +329,6 @@ export default function AuditResult({ data, url }: AuditResultProps) {
             </ul>
           </CardContent>
         </Card>
-      )}
-
-      {/* Comparison Table */}
-      {data.comparisons && (
-        <ComparisonTable comparisons={data.comparisons} />
       )}
 
       {/* Action Items */}
