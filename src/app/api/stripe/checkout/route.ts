@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/firebase-admin';
 import { db } from '@/lib/firebase-admin';
 import { stripe } from '@/lib/stripe';
+import type Stripe from 'stripe';
 
 // Plan mapping with your actual Stripe Price IDs
 const PRICE_PLANS: Record<string, string> = {
