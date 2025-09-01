@@ -207,7 +207,7 @@ export function getTrustBadge(data: AuditData): TrustBadge {
   }
 
   // Partial verification
-  if (sourceCount < 3 || adjustedScore < 7 || data.missing_angles?.length > 2) {
+  if (sourceCount < 3 || adjustedScore < 7 || (data.missing_angles?.length || 0) > 2) {
     return {
       level: 'partial',
       icon: '🔍',
