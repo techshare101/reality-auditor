@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import InfoModal from "@/components/InfoModal";
 import { motion } from "framer-motion";
 import { Eye, Sparkles, TrendingUp, Search, AlertTriangle, CheckCircle } from "lucide-react";
 import ComparisonTable from "@/components/ComparisonTable";
@@ -308,12 +309,34 @@ export default function LandingPage() {
             <div>
               <h3 className="text-white font-semibold mb-4">Legal</h3>
               <div className="space-y-2">
-                <Link href="/privacy" className="text-gray-400 hover:text-white block transition-colors text-sm">
-                  Privacy Policy
-                </Link>
-                <Link href="/terms" className="text-gray-400 hover:text-white block transition-colors text-sm">
-                  Terms of Service
-                </Link>
+                <InfoModal triggerLabel="Privacy Policy" title="Privacy Policy">
+                  <p>
+                    Reality Auditor respects your privacy. We never sell your data. Audit results are stored
+                    only to enforce usage limits. Anonymized usage data may be used to improve the service.
+                  </p>
+                  <p>
+                    Authentication is handled via Firebase Auth. Payments are processed by Stripe — we never
+                    see or store your card details.
+                  </p>
+                  <p>
+                    By using this site, you agree to these practices. Contact us at support@realityauditor.com with questions.
+                  </p>
+                </InfoModal>
+                <InfoModal triggerLabel="Terms of Service" title="Terms of Service">
+                  <p>
+                    By accessing or using Reality Auditor, you agree to comply with these Terms of Service.
+                  </p>
+                  <p>
+                    You are responsible for how you use the audits generated. Reality Auditor does not
+                    guarantee 100% accuracy of analysis or citations.
+                  </p>
+                  <p>
+                    Subscriptions are billed via Stripe. You may cancel anytime via the Billing Portal.
+                  </p>
+                  <p>
+                    We reserve the right to update these terms to keep the service secure and compliant.
+                  </p>
+                </InfoModal>
               </div>
             </div>
           </div>

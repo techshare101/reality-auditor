@@ -6,6 +6,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { Eye, Mail, Lock, User, Loader2, AlertCircle } from "lucide-react";
+import InfoModal from "@/components/InfoModal";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
@@ -214,13 +215,43 @@ export default function RegisterPage() {
 
         <p className="mt-4 text-center text-xs text-gray-500">
           By signing up, you agree to our{" "}
-          <Link href="/terms" className="text-purple-400 hover:underline">
-            Terms of Service
-          </Link>{" "}
+          <InfoModal
+            triggerLabel="Terms of Service"
+            title="Terms of Service"
+            className="text-purple-400 hover:underline"
+          >
+            <p>
+              By accessing or using Reality Auditor, you agree to comply with these Terms of Service.
+            </p>
+            <p>
+              You are responsible for how you use the audits generated. Reality Auditor does not
+              guarantee 100% accuracy of analysis or citations.
+            </p>
+            <p>
+              Subscriptions are billed via Stripe. You may cancel anytime via the Billing Portal.
+            </p>
+            <p>
+              We reserve the right to update these terms to keep the service secure and compliant.
+            </p>
+          </InfoModal>{" "}
           and{" "}
-          <Link href="/privacy" className="text-purple-400 hover:underline">
-            Privacy Policy
-          </Link>
+          <InfoModal
+            triggerLabel="Privacy Policy"
+            title="Privacy Policy"
+            className="text-purple-400 hover:underline"
+          >
+            <p>
+              Reality Auditor respects your privacy. We never sell your data. Audit results are stored
+              only to enforce usage limits. Anonymized usage data may be used to improve the service.
+            </p>
+            <p>
+              Authentication is handled via Firebase Auth. Payments are processed by Stripe — we never
+              see or store your card details.
+            </p>
+            <p>
+              By using this site, you agree to these practices. Contact us at support@realityauditor.com with questions.
+            </p>
+          </InfoModal>
         </p>
       </motion.div>
     </div>
