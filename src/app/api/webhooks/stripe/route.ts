@@ -114,7 +114,7 @@ export async function POST(req: NextRequest) {
         console.log('✅ Invoice paid:', invoice.id);
         
         // Reset usage for recurring payments (not first payment)
-        if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {
+        if ((invoice as any).subscription && invoice.billing_reason === 'subscription_cycle') {
           await handleUsageReset(invoice);
         }
         break;
@@ -275,6 +275,7 @@ async function handleSubscriptionCancelled(subscription: any) {
 async function handleUsageReset(invoice: any) {
   try {
     const customerId = invoice.customer;
+    const subscriptionId = invoice.subscription; // Now safe to access
     const usersSnapshot = await db.collection('subscriptions')
       .where('stripeCustomerId', '==', customerId)
       .limit(1)

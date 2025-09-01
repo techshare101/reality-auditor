@@ -197,9 +197,9 @@ export async function POST(request: NextRequest) {
         console.log("💰 Payment succeeded for invoice:", invoice.id);
 
         // Reset monthly usage on successful payment for subscription cycles
-        if (invoice.subscription && invoice.billing_reason === "subscription_cycle") {
+        if ((invoice as any).subscription && invoice.billing_reason === "subscription_cycle") {
           const subscriptionsQuery = await db.collection("subscriptions")
-            .where("stripeSubscriptionId", "==", invoice.subscription)
+            .where("stripeSubscriptionId", "==", (invoice as any).subscription)
             .limit(1)
             .get();
 
@@ -240,9 +240,9 @@ export async function POST(request: NextRequest) {
         console.log("❌ Payment failed for invoice:", invoice.id);
 
         // Handle failed payments
-        if (invoice.subscription) {
+        if ((invoice as any).subscription) {
           const subscriptionsQuery = await db.collection("subscriptions")
-            .where("stripeSubscriptionId", "==", invoice.subscription)
+            .where("stripeSubscriptionId", "==", (invoice as any).subscription)
             .limit(1)
             .get();
 
@@ -255,7 +255,7 @@ export async function POST(request: NextRequest) {
               updatedAt: Timestamp.now(),
             });
 
-            console.log(`⚠️ Marked payment as failed for subscription ${invoice.subscription}`);
+            console.log(`⚠️ Marked payment as failed for subscription ${(invoice as any).subscription}`);
           }
         }
         break;
