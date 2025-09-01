@@ -6,7 +6,7 @@ import type Stripe from 'stripe';
 
 // Plan mapping with your actual Stripe Price IDs
 const PRICE_PLANS: Record<string, string> = {
-  basic_monthly: 'price_1S1tnbGnOgSIwPZhYfV3aFXe', // Your $19/month Basic plan
+  basic_monthly: 'price_1S2KmxGRxp9eu0DJrdcrLLNR', // Your actual $19/month Basic plan live price ID
   
   // Placeholders for future plans (replace when you create them in Stripe)
   basic_yearly: 'price_basic_yearly_placeholder',

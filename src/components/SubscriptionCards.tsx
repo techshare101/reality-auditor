@@ -20,6 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
+import { getUserUsage } from '@/lib/usage';
 
 interface SubscriptionData {
   planType: 'free' | 'basic' | 'pro' | 'enterprise';
@@ -394,7 +395,7 @@ export default function SubscriptionCards() {
                 
                 {subscriptionData.planType === 'free' && (
                   <Button
-                    onClick={() => handleUpgrade('price_1S1tnbGnOgSIwPZhYfV3aFXe')}
+                    onClick={() => handleUpgrade('price_1S2KmxGRxp9eu0DJrdcrLLNR')}
                     size="sm"
                     className="bg-gradient-to-r from-purple-500 to-indigo-600 hover:scale-105 transition-transform"
                   >
@@ -475,7 +476,7 @@ export default function SubscriptionCards() {
 
               {subscriptionData.auditsRemaining === 0 && (
                 <Button
-                  onClick={() => handleUpgrade('price_1S1tnbGnOgSIwPZhYfV3aFXe')}
+                  onClick={() => handleUpgrade('price_1S2KmxGRxp9eu0DJrdcrLLNR')}
                   className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:scale-105 transition-transform"
                 >
                   <Sparkles className="w-4 h-4 mr-2" />
@@ -529,7 +530,7 @@ export default function SubscriptionCards() {
                 </div>
 
                 <Button
-                  onClick={() => handleUpgrade('price_1S1tnbGnOgSIwPZhYfV3aFXe')}
+                  onClick={() => handleUpgrade('price_1S2KmxGRxp9eu0DJrdcrLLNR')}
                   className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 hover:scale-105 transition-all"
                 >
                   <ArrowUpRight className="w-4 h-4 mr-2" />

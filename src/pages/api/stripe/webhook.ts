@@ -54,6 +54,9 @@ interface CustomerData {
 // Map Stripe plan IDs to your plan types
 const PLAN_MAPPING: Record<string, { name: string; type: SubscriptionData['planType']; auditsLimit: number }> = {
   // Your actual Price ID - $19/month Basic plan
+  'price_1S2KmxGRxp9eu0DJrdcrLLNR': { name: 'Basic Monthly', type: 'basic', auditsLimit: 50 },
+  
+  // Legacy price ID (keep for existing subscriptions)
   'price_1S1tnbGnOgSIwPZhYfV3aFXe': { name: 'Basic Monthly', type: 'basic', auditsLimit: 50 },
   
   // Placeholders for future plans (replace with real Price IDs when created)

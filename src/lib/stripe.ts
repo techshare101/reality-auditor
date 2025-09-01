@@ -20,9 +20,9 @@ export const getStripe = () => {
 };
 
 // Helper function to create checkout session
-export async function createCheckoutSession(priceId: string, successUrl?: string, cancelUrl?: string) {
+export async function createCheckoutSession(priceId: string, successUrl?: string, cancelUrl?: string, customerId?: string, customerEmail?: string) {
   try {
-    const session = await stripe.checkout.sessions.create({
+    const sessionConfig: any = {
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [
@@ -34,12 +34,20 @@ export async function createCheckoutSession(priceId: string, successUrl?: string
       success_url: successUrl || `${process.env.NEXT_PUBLIC_APP_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_APP_URL}/pricing`,
       allow_promotion_codes: true,
-      billing_address_collection: 'required',
-      customer_creation: 'always',
+      billing_address_collection: 'auto',
       metadata: {
         product: 'Reality Auditor Pro',
       },
-    });
+    };
+
+    // Handle customer identification
+    if (customerId) {
+      sessionConfig.customer = customerId;
+    } else if (customerEmail) {
+      sessionConfig.customer_email = customerEmail;
+    }
+
+    const session = await stripe.checkout.sessions.create(sessionConfig);
 
     return { sessionId: session.id, url: session.url };
   } catch (error) {

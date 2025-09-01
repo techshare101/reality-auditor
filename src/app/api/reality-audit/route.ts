@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuditRequestSchema, RealityAuditSchema } from "@/lib/schemas";
 import { getCitations, getFactCheckSources } from "@/lib/tavily";
-import { checkSubscriptionStatus, incrementUsage } from "@/lib/subscription-checker";
+import { checkSubscriptionStatus } from "@/lib/subscription-checker";
+import { incrementUserUsage } from "@/lib/usage";
 import { auth } from "@/lib/firebase-admin";
 import OpenAI from "openai";
 import { TavilyClient } from "tavily";
@@ -190,16 +191,13 @@ export async function POST(request: NextRequest) {
       // Count cache hits toward usage as well
       if (userId) {
         try {
-          const usageResult = await incrementUsage(userId);
-          if (usageResult.success) {
-            console.log(`📈 Updated usage for ${userId}: ${usageResult.newUsageCount} audits used, ${usageResult.auditsRemaining} remaining (cache)`);
-            responseBody.usage = {
-              auditsUsed: usageResult.newUsageCount,
-              auditsRemaining: usageResult.auditsRemaining,
-            };
-          } else {
-            console.warn('⚠️ Failed to update usage count on cache hit:', usageResult.error);
-          }
+          const newUsageCount = await incrementUserUsage(userId);
+          const subscriptionStatus = await checkSubscriptionStatus(userId);
+          console.log(`📈 Updated usage for ${userId}: ${newUsageCount} audits used, ${subscriptionStatus.auditsRemaining} remaining (cache)`);
+          responseBody.usage = {
+            auditsUsed: newUsageCount,
+            auditsRemaining: subscriptionStatus.auditsRemaining,
+          };
         } catch (usageError) {
           console.error('❌ Error updating usage on cache hit:', usageError);
         }
@@ -295,17 +293,19 @@ export async function POST(request: NextRequest) {
     // Increment usage count if user is authenticated (only for successful audits)
     if (userId) {
       try {
-        const usageResult = await incrementUsage(userId);
-        if (usageResult.success) {
-          console.log(`📈 Updated usage for ${userId}: ${usageResult.newUsageCount} audits used, ${usageResult.auditsRemaining} remaining`);
-          
-          // Add usage info to response
-          resultWithCache.usage = {
-            auditsUsed: usageResult.newUsageCount,
-            auditsRemaining: usageResult.auditsRemaining
-          };
-        } else {
-          console.warn('⚠️ Failed to update usage count:', usageResult.error);
+        const newUsageCount = await incrementUserUsage(userId);
+        const subscriptionStatus = await checkSubscriptionStatus(userId);
+        console.log(`📈 Updated usage for ${userId}: ${newUsageCount} audits used, ${subscriptionStatus.auditsRemaining} remaining`);
+        
+        // Add usage info to response
+        resultWithCache.usage = {
+          auditsUsed: newUsageCount,
+          auditsRemaining: subscriptionStatus.auditsRemaining
+        };
+        
+        // Signal audit completion for UI refresh
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem('audit-completed', Date.now().toString());
         }
       } catch (usageError) {
         console.error('❌ Error updating usage:', usageError);
