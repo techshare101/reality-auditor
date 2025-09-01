@@ -19,7 +19,9 @@ import {
   Clock,
   User,
   Calendar,
-  Building
+  Building,
+  CreditCard,
+  ArrowUpRight
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -38,19 +40,27 @@ import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outl
 
 const demoText = `Breaking: New policy claims to reduce emissions by 50% in two years. Officials did not release methodology. Independent analysts argue baseline year was cherry-picked and offsets account for most reductions. The policy has broad support among environmental groups but faces criticism from industry leaders who claim it will hurt the economy. No peer-reviewed studies have validated the proposed approach.`;
 
-async function postAudit(payload: AuditRequest): Promise<RealityAudit> {
+async function postAudit(payload: AuditRequest, authToken?: string): Promise<RealityAudit | { error: string; details?: any }> {
   try {
+    const headers: any = { "Content-Type": "application/json" };
+    if (authToken) {
+      headers["Authorization"] = `Bearer ${authToken}`;
+    }
+    
     const res = await fetch("/api/reality-audit", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     });
     
+    const responseData = await res.json();
+    
     if (!res.ok) {
-      throw new Error(`HTTP error! status: ${res.status}`);
+      // Return error data for handling in component
+      return { error: res.status === 402 ? 'LIMIT_EXCEEDED' : 'API_ERROR', details: responseData };
     }
     
-    return await res.json();
+    return responseData;
   } catch (error) {
     console.error("API call failed, using mock data:", error);
     
@@ -157,6 +167,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   const [currentStep, setCurrentStep] = useState("");
   const [showMetadata, setShowMetadata] = useState(false);
   const [showAllSources, setShowAllSources] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   async function loadArticle() {
     if (!url.trim()) {
@@ -292,7 +303,25 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
         metadata: Object.values(metadata).some(v => v.trim()) ? metadata : undefined
       };
       
-      const result = await postAudit(auditRequest);
+      // Get auth token if available
+      const authToken = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      const result = await postAudit(auditRequest, authToken || undefined);
+      
+      // Check if this is an error response
+      if ('error' in result) {
+        if (result.error === 'LIMIT_EXCEEDED') {
+          // Show upgrade prompt instead of error
+          setShowUpgradePrompt(true);
+          setLoading(false);
+          return;
+        } else {
+          // Some other API error
+          setError(result.details?.error || "Audit failed. Please try again.");
+          setLoading(false);
+          return;
+        }
+      }
+      
       console.log("🎯 Frontend received result:", result);
       console.log("📊 Bias patterns:", result.bias_patterns);
       console.log("❓ Missing angles:", result.missing_angles);
@@ -1151,6 +1180,113 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                   </CardContent>
                 </Card>
               </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Upgrade Prompt Modal */}
+        <AnimatePresence>
+          {showUpgradePrompt && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+              onClick={() => setShowUpgradePrompt(false)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                transition={{ type: "spring", stiffness: 200 }}
+                className="bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 border border-white/20 rounded-3xl shadow-2xl max-w-md w-full p-8"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {/* Icon and Title */}
+                <div className="text-center mb-6">
+                  <motion.div
+                    animate={{ 
+                      rotate: [0, -10, 10, 0],
+                      scale: [1, 1.1, 1]
+                    }}
+                    transition={{ 
+                      repeat: Infinity, 
+                      duration: 3,
+                      ease: "easeInOut" 
+                    }}
+                    className="inline-flex p-4 rounded-full bg-gradient-to-br from-amber-500/20 to-orange-600/20 border border-amber-500/30 mb-4"
+                  >
+                    <Zap className="w-12 h-12 text-amber-300" />
+                  </motion.div>
+                  <h2 className="text-3xl font-bold bg-gradient-to-r from-amber-200 to-orange-200 bg-clip-text text-transparent mb-2">
+                    Audit Limit Reached
+                  </h2>
+                  <p className="text-white/80 text-lg">
+                    You've used all your free audits this month!
+                  </p>
+                </div>
+
+                {/* Benefits */}
+                <div className="space-y-3 mb-8">
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="p-1 rounded-lg bg-green-500/20">
+                      <Clock className="w-5 h-5 text-green-300" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Unlimited Audits</p>
+                      <p className="text-white/60 text-sm">Audit as many articles as you need</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="p-1 rounded-lg bg-blue-500/20">
+                      <TrendingUp className="w-5 h-5 text-blue-300" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Priority Processing</p>
+                      <p className="text-white/60 text-sm">Get faster results with dedicated resources</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+                    <div className="p-1 rounded-lg bg-purple-500/20">
+                      <Sparkles className="w-5 h-5 text-purple-300" />
+                    </div>
+                    <div>
+                      <p className="text-white font-medium">Advanced Features</p>
+                      <p className="text-white/60 text-sm">Access deeper analysis and insights</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Pricing */}
+                <div className="text-center mb-6">
+                  <p className="text-white/60 mb-2">Starting at just</p>
+                  <div className="flex items-baseline justify-center gap-1">
+                    <span className="text-4xl font-bold text-white">$29</span>
+                    <span className="text-white/60">/month</span>
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex gap-3">
+                  <Button
+                    onClick={() => window.location.href = '/dashboard'}
+                    className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all"
+                    size="lg"
+                  >
+                    <CreditCard className="w-5 h-5 mr-2" />
+                    Upgrade Now
+                    <ArrowUpRight className="w-4 h-4 ml-1" />
+                  </Button>
+                  <Button
+                    onClick={() => setShowUpgradePrompt(false)}
+                    variant="outline"
+                    className="border-white/20 hover:bg-white/10"
+                    size="lg"
+                  >
+                    Maybe Later
+                  </Button>
+                </div>
+              </motion.div>
             </motion.div>
           )}
         </AnimatePresence>
