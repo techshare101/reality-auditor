@@ -5,7 +5,22 @@ import Link from 'next/link';
 import { db, auth } from '@/lib/firebase-admin';
 import { cookies } from 'next/headers';
 
-async function getAudit(id: string, userId: string | null) {
+interface AuditData {
+  id: string;
+  url?: string;
+  result?: any;
+  metadata?: {
+    title?: string;
+    outlet?: string;
+    author?: string;
+    date?: string;
+  };
+  createdAt: Date;
+  userId?: string;
+  [key: string]: any;
+}
+
+async function getAudit(id: string, userId: string | null): Promise<AuditData | null> {
   try {
     const docRef = db.collection('audits').doc(id);
     const doc = await docRef.get();
