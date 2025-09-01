@@ -83,14 +83,6 @@ async function postAudit(payload: AuditRequest): Promise<RealityAudit> {
               "https://www.politico.com/news/2025/08/30/sample-article-001",
               "https://apnews.com/article/sample-test"
             ],
-            sources: buildSources([
-              "https://www.reuters.com/world/europe/sample-article",
-              "https://www.nytimes.com/2025/08/30/world/sample.html",
-              "https://www.bbc.co.uk/news/world-sample",
-              "https://www.axios.com/2025/08/30/sample",
-              "https://www.politico.com/news/2025/08/30/sample-article-001",
-              "https://apnews.com/article/sample-test"
-            ], payload?.url),
             summary: "This content shows moderate truth value but exhibits clear bias patterns through selective presentation of evidence and loaded language. Key missing elements include comprehensive cost-benefit analysis and diverse stakeholder perspectives. While some claims are factually supported, the overall framing lacks objectivity and omits important counterarguments that would provide readers with a more complete picture.",
             confidence_level: 0.82,
             warnings: [
@@ -1048,16 +1040,29 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                           sources = rawSources;
                         } else {
                           const seen = new Set<string>();
-                          sources = (data?.citations || []).reduce((arr: Array<{ url: string; outlet: string }>, u: string) => {
+                          const out: Array<{ url: string; outlet: string }> = [];
+                          // Include the user-submitted URL as "Original Source" when present
+                          if (url && typeof url === 'string' && url.trim()) {
+                            try {
+                              const oHost = new URL(url).hostname;
+                              const oDomain = getRegistrableDomain(oHost);
+                              if (!seen.has(oDomain)) {
+                                seen.add(oDomain);
+                                out.push({ url, outlet: 'Original Source' });
+                              }
+                            } catch {}
+                          }
+                          // Add citations, deduped by registrable domain
+                          for (const u of (data?.citations || [])) {
                             try {
                               const host = new URL(u).hostname;
                               const domain = getRegistrableDomain(host);
-                              if (seen.has(domain)) return arr;
+                              if (seen.has(domain)) continue;
                               seen.add(domain);
-                              arr.push({ url: u, outlet: outletFromDomain(host) });
+                              out.push({ url: u, outlet: outletFromDomain(host) });
                             } catch {}
-                            return arr;
-                          }, []);
+                          }
+                          sources = out;
                         }
                         if (!sources || sources.length === 0) {
                           return <p className="text-white/70 text-sm">No verified citations available.</p>;
