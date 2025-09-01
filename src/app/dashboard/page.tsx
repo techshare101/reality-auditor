@@ -10,12 +10,16 @@ import { motion } from "framer-motion";
 import { Loader2, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuditCache } from "@/lib/useAuditCache";
+import BillingDebugPanel from "@/components/BillingDebugPanel";
+import { useSearchParams } from "next/navigation";
 import InfoModal from "@/components/InfoModal";
 
 export default function DashboardPage() {
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const { clearAudits } = useAuditCache();
+  const searchParams = useSearchParams();
+  const debugMode = searchParams?.get('debug') === '1';
 
   const handleLogout = async () => {
     try {
@@ -147,6 +151,17 @@ export default function DashboardPage() {
             </div>
           </div>
           
+          {debugMode && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.15 }}
+              className="mb-6"
+            >
+              <BillingDebugPanel />
+            </motion.div>
+          )}
+
           {/* Subscription Cards */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
