@@ -3,7 +3,7 @@
 import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUsageListener } from "@/hooks/useUsageListener";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { 
   Zap, 
@@ -18,7 +18,55 @@ import { Button } from "@/components/ui/button";
 export default function UsageDisplay() {
   const { user } = useAuth();
   const router = useRouter();
-  const { usage, loading, error } = useUsageListener(user?.uid || null);
+  
+  // Handle unauthenticated users
+  if (!user) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl bg-gradient-to-br from-gray-900/80 to-gray-800/50 backdrop-blur-xl p-6 border border-gray-700/50 shadow-xl"
+      >
+        <div className="text-center">
+          <motion.div
+            animate={{ rotate: [0, 10, -10, 0] }}
+            transition={{ repeat: Infinity, duration: 4, ease: "easeInOut" }}
+            className="inline-flex p-3 rounded-full bg-gradient-to-br from-purple-500/20 to-indigo-500/20 border border-purple-500/30 mb-4"
+          >
+            <Zap className="w-8 h-8 text-purple-400" />
+          </motion.div>
+          
+          <h3 className="text-lg font-semibold text-white mb-2">
+            Start Your Truth Journey
+          </h3>
+          
+          <p className="text-sm text-gray-400 mb-4">
+            Sign up to get 5 free audits every month
+          </p>
+          
+          <div className="space-y-2">
+            <Button
+              onClick={() => router.push("/signup")}
+              className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 text-white border-0 shadow-lg shadow-purple-500/20"
+              size="sm"
+            >
+              Sign Up Free
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </Button>
+            
+            <button
+              onClick={() => router.push("/login")}
+              className="w-full text-xs text-gray-400 hover:text-white transition-colors"
+            >
+              Already have an account? Sign in
+            </button>
+          </div>
+        </div>
+      </motion.div>
+    );
+  }
+  
+  const { usage, loading, error } = useUsageListener(user.uid);
 
   if (loading) {
     return (
@@ -174,7 +222,7 @@ export default function UsageDisplay() {
               {/* Actions */}
               <div className="flex gap-3">
                 <Button
-                  onClick={() => router.push("/dashboard")}
+                  onClick={() => router.push("/pricing")}
                   className="flex-1 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white border-0 shadow-lg shadow-indigo-500/20"
                   size="lg"
                 >
@@ -182,12 +230,12 @@ export default function UsageDisplay() {
                   <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
                 <Button
-                  onClick={() => router.push("/")}
+                  onClick={() => window.location.reload()}
                   variant="outline"
                   className="border-gray-700 hover:bg-gray-800"
                   size="lg"
                 >
-                  Go Home
+                  Try Again
                 </Button>
               </div>
 
