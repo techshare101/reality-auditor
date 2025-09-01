@@ -83,6 +83,14 @@ async function postAudit(payload: AuditRequest): Promise<RealityAudit> {
               "https://www.politico.com/news/2025/08/30/sample-article-001",
               "https://apnews.com/article/sample-test"
             ],
+            sources: buildSources([
+              "https://www.reuters.com/world/europe/sample-article",
+              "https://www.nytimes.com/2025/08/30/world/sample.html",
+              "https://www.bbc.co.uk/news/world-sample",
+              "https://www.axios.com/2025/08/30/sample",
+              "https://www.politico.com/news/2025/08/30/sample-article-001",
+              "https://apnews.com/article/sample-test"
+            ], payload?.url),
             summary: "This content shows moderate truth value but exhibits clear bias patterns through selective presentation of evidence and loaded language. Key missing elements include comprehensive cost-benefit analysis and diverse stakeholder perspectives. While some claims are factually supported, the overall framing lacks objectivity and omits important counterarguments that would provide readers with a more complete picture.",
             confidence_level: 0.82,
             warnings: [

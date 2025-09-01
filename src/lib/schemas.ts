@@ -6,6 +6,8 @@ export const RealityAuditSchema = z.object({
   bias_patterns: z.array(z.string()).describe("Identified bias patterns like loaded language, cherry-picking, etc."),
   missing_angles: z.array(z.string()).describe("Important perspectives, context, or evidence not covered"),
   citations: z.array(z.string().url()).describe("Verified source URLs that support or refute claims"),
+  // Optional normalized sources with outlet labels for UI rendering
+  sources: z.array(z.object({ url: z.string().url(), outlet: z.string() })).optional().describe("Normalized source URLs with outlet names (deduped by domain)"),
   summary: z.string().describe("Plain English audit explaining the analysis"),
   confidence_level: z.number().min(0).max(1).describe("Confidence in the audit analysis (0-1)").optional(),
   manipulation_tactics: z.array(z.string()).describe("Specific manipulation techniques detected").optional(),
