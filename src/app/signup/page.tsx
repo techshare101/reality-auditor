@@ -11,7 +11,7 @@ import MarketingLayout from "@/components/MarketingLayout";
 export default function SignupPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, signup } = useAuth();
+  const { user, signUp } = useAuth();
   
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -59,7 +59,7 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      await signup(email, password);
+      await signUp(email, password);
       
       // If coming from pricing page with a plan, redirect to checkout
       if (planParam === "basic" && redirectParam === "checkout") {
