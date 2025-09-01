@@ -70,13 +70,19 @@ export default function SignupPage() {
     } catch (error: any) {
       console.error("Signup error:", error);
       
-      // Handle specific Firebase error codes
+      // Handle specific Firebase error codes with better user messages
       if (error.code === "auth/email-already-in-use") {
         setError("This email is already registered. Please log in instead.");
       } else if (error.code === "auth/invalid-email") {
-        setError("Invalid email address");
+        setError("Please enter a valid email address.");
       } else if (error.code === "auth/weak-password") {
-        setError("Password is too weak. Please use at least 6 characters.");
+        setError("Password is too weak. Please use at least 6 characters with a mix of letters and numbers.");
+      } else if (error.code === "auth/operation-not-allowed") {
+        setError("Email/password accounts are not enabled. Please contact support.");
+      } else if (error.code === "auth/network-request-failed") {
+        setError("Network error. Please check your internet connection and try again.");
+      } else if (error.code === "auth/too-many-requests") {
+        setError("Too many failed attempts. Please try again later.");
       } else {
         setError(error.message || "Failed to create account. Please try again.");
       }
