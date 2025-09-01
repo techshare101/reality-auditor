@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { stripe } from '@/lib/stripe';
+import { getStripe, stripeHelpers } from '@/lib/stripeClient';
 
 export async function POST(request: NextRequest) {
   try {
@@ -57,6 +57,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Look up existing Stripe customer by email
+    const stripe = getStripe();
     const customers = await stripe.customers.list({ 
       email: userEmail, 
       limit: 1 
@@ -99,7 +100,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create billing portal session
-    const session = await stripe.billingPortal.sessions.create({
+    const session = await stripeHelpers.createPortalSession({
       customer: stripeCustomer.id,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard`,
     });

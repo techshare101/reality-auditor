@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db } from "@/lib/firebase-admin";
 import { Timestamp } from "firebase-admin/firestore";
+import { getStripe, constructWebhookEvent } from "@/lib/stripeClient";
 
 // Mark this route as dynamic
 export const dynamic = 'force-dynamic';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-08-27.basil",
-});
-
+const stripe = getStripe();
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 export async function POST(request: NextRequest) {
@@ -27,7 +25,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, sig, endpointSecret);
+    event = constructWebhookEvent(body, sig, endpointSecret);
   } catch (err: any) {
     console.error("❌ Webhook signature verification failed:", err.message);
     return NextResponse.json(

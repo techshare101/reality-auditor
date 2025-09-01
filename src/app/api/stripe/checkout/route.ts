@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/firebase-admin';
 import { db } from '@/lib/firebase-admin';
-import { stripe } from '@/lib/stripe';
+import { getStripe, stripeHelpers } from '@/lib/stripeClient';
 import type Stripe from 'stripe';
 
 // Plan mapping with your actual Stripe Price IDs
@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
     if (userId && userEmail && !stripeCustomerId) {
       console.log(`🆕 Creating new Stripe customer for user: ${userId}`);
       // Create a new Stripe customer
+      const stripe = getStripe();
       const customer = await stripe.customers.create({
         email: userEmail,
         metadata: {
@@ -138,7 +139,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Stripe not configured on server' }, { status: 500 });
     }
 
-    const session = await stripe.checkout.sessions.create(sessionConfig);
+    const session = await stripeHelpers.createCheckoutSession(sessionConfig);
 
     console.log(`✅ Checkout session created: ${session.id}`);
 
