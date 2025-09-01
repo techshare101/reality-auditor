@@ -7,7 +7,7 @@ import { Timestamp } from "firebase-admin/firestore";
 export const dynamic = 'force-dynamic';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-11-20.acacia",
+  apiVersion: "2025-08-27.basil",
 });
 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -60,17 +60,16 @@ export async function POST(request: NextRequest) {
         let planType = "basic";
         let auditsLimit = 100;
 
-        // You can customize these based on your price IDs
-        if (priceId === "price_1S2KmxGRxp9eu0DJrdcrLLNR") {
-          planType = "basic";
-          auditsLimit = 100;
-        } else if (priceId === process.env.STRIPE_PRICE_PRO_ID) {
-          planType = "pro";
-          auditsLimit = 200;
-        } else if (priceId === process.env.STRIPE_PRICE_TEAM_ID) {
-          planType = "team";
-          auditsLimit = 1000;
-        }
+        // Map price IDs to plans and limits
+        const priceToPlan: Record<string, { plan: string; limit: number }> = {
+          'price_1QUsqXRrC5nflManTGgCF3pY': { plan: 'basic', limit: 100 },
+          'price_1QUstJRrC5nflManZvdQKFgJ': { plan: 'pro', limit: 500 },
+          // Add your actual price IDs here
+        };
+        
+        const planInfo = priceToPlan[priceId || ''] || { plan: 'basic', limit: 100 };
+        planType = planInfo.plan;
+        auditsLimit = planInfo.limit;
 
         // Get subscription details
         const subscriptionId = session.subscription as string;
@@ -199,7 +198,7 @@ export async function POST(request: NextRequest) {
         const invoice = event.data.object as Stripe.Invoice;
         console.log("💰 Payment succeeded for invoice:", invoice.id);
 
-        // Reset monthly usage on successful payment
+        // Reset monthly usage on successful payment for subscription cycles
         if (invoice.subscription && invoice.billing_reason === "subscription_cycle") {
           const subscriptionsQuery = await db.collection("subscriptions")
             .where("stripeSubscriptionId", "==", invoice.subscription)
@@ -209,19 +208,28 @@ export async function POST(request: NextRequest) {
           if (!subscriptionsQuery.empty) {
             const doc = subscriptionsQuery.docs[0];
             const userId = doc.id;
+            const userData = doc.data();
 
+            // Update subscription collection
             await doc.ref.update({
               auditsUsed: 0,
               lastPaymentDate: Timestamp.now(),
               updatedAt: Timestamp.now(),
             });
 
-            // Also reset usage in the usage collection
+            // Reset usage in the usage collection
             const usageRef = db.collection("usage").doc(userId);
-            await usageRef.update({
+            const previousUsage = (await usageRef.get()).data();
+            
+            await usageRef.set({
               audits_used: 0,
+              audit_limit: userData.auditsLimit || 100,
+              plan: userData.planType || 'basic',
               last_reset: Timestamp.now(),
-            });
+              previous_period_usage: previousUsage?.audits_used || 0,
+              billing_cycle_start: new Date().toISOString(),
+              subscription_active: true
+            }, { merge: true });
 
             console.log(`✅ Reset usage counter for ${userId} on new billing cycle`);
           }

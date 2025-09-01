@@ -44,6 +44,7 @@ import {
   getVerdictLabel,
   formatCitationDisplay
 } from '@/utils/auditScoring';
+import { CardHelper } from '@/components/ui/CardHelper';
 
 const demoText = `Breaking: New policy claims to reduce emissions by 50% in two years. Officials did not release methodology. Independent analysts argue baseline year was cherry-picked and offsets account for most reductions. The policy has broad support among environmental groups but faces criticism from industry leaders who claim it will hurt the economy. No peer-reviewed studies have validated the proposed approach.`;
 
@@ -738,22 +739,28 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                       'bg-gradient-to-br from-red-500/15 via-red-600/10 to-red-700/15 border-red-500/30 danger-glow'}
                   `}>
                     <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-3 text-xl">
-                        <motion.div
-                          animate={{ 
-                            scale: [1, 1.1, 1],
-                            rotate: [0, 10, -10, 0] 
-                          }}
-                          transition={{ 
-                            repeat: Infinity, 
-                            duration: data.truth_score >= 8 ? 3 : 4, 
-                            ease: "easeInOut" 
-                          }}
-                          className="p-2 rounded-xl bg-white/10 border border-white/20"
-                        >
-                          <ShieldCheck className="w-5 h-5" /> 
-                        </motion.div>
-                        <span className="bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">Truth Score</span>
+                      <CardTitle className="flex items-center justify-between gap-3 text-xl">
+                        <div className="flex items-center gap-3">
+                          <motion.div
+                            animate={{ 
+                              scale: [1, 1.1, 1],
+                              rotate: [0, 10, -10, 0] 
+                            }}
+                            transition={{ 
+                              repeat: Infinity, 
+                              duration: data.truth_score >= 8 ? 3 : 4, 
+                              ease: "easeInOut" 
+                            }}
+                            className="p-2 rounded-xl bg-white/10 border border-white/20"
+                          >
+                            <ShieldCheck className="w-5 h-5" /> 
+                          </motion.div>
+                          <span className="bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">Truth Score</span>
+                        </div>
+                        <CardHelper 
+                          message="Score reflects verified facts vs. unverified/biased claims. Neutral (5/10) when evidence is missing."
+                          tone="neutral"
+                        />
                         
                         {/* Trust Badge */}
                         {(data as any).trust_badge && (
@@ -888,9 +895,15 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                 {/* Bias Patterns */}
                 <Card className="bg-white/10 border-white/15 backdrop-blur-xl rounded-3xl shadow-2xl">
                   <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-2xl">
-                      <TrendingUp className="w-7 h-7" /> 
-                      Bias Patterns
+                    <CardTitle className="flex items-center justify-between gap-2 text-2xl">
+                      <div className="flex items-center gap-2">
+                        <TrendingUp className="w-7 h-7" /> 
+                        Bias Patterns
+                      </div>
+                      <CardHelper 
+                        message="Bias patterns show how framing may shape perception. More patterns = higher bias risk."
+                        tone={data.bias_patterns.length > 3 ? "warning" : "neutral"}
+                      />
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -920,9 +933,15 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                 {/* Missing Angles */}
                 <Card className="bg-white/10 border-white/15 backdrop-blur-xl rounded-3xl shadow-2xl">
                   <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-2xl">
-                      <Search className="w-7 h-7" /> 
-                      Missing Angles
+                    <CardTitle className="flex items-center justify-between gap-2 text-2xl">
+                      <div className="flex items-center gap-2">
+                        <Search className="w-7 h-7" /> 
+                        Missing Angles
+                      </div>
+                      <CardHelper 
+                        message="Missing context or counterpoints. If these angles aren't covered, the piece may be one-sided."
+                        tone={data.missing_angles.length > 2 ? "warning" : "neutral"}
+                      />
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
@@ -968,15 +987,21 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                     >
                       <GlassCard variant="danger" intensity="medium" className="hover:shadow-red-500/10 transition-all duration-300 group">
                         <GlassCardHeader className="pb-3">
-                          <GlassCardTitle className="flex items-center gap-3 text-xl">
-                            <motion.div
-                              animate={{ rotate: [0, -5, 5, 0] }}
-                              transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-                              className="p-2 rounded-xl bg-red-500/20 border border-red-500/30"
-                            >
-                              <AlertTriangle className="w-5 h-5 text-red-400" /> 
-                            </motion.div>
-                            Manipulation Tactics
+                          <GlassCardTitle className="flex items-center justify-between gap-3 text-xl">
+                            <div className="flex items-center gap-3">
+                              <motion.div
+                                animate={{ rotate: [0, -5, 5, 0] }}
+                                transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+                                className="p-2 rounded-xl bg-red-500/20 border border-red-500/30"
+                              >
+                                <AlertTriangle className="w-5 h-5 text-red-400" /> 
+                              </motion.div>
+                              Manipulation Tactics
+                            </div>
+                            <CardHelper 
+                              message="Rhetorical tactics (like exaggeration or appeals to fear) may sway readers emotionally."
+                              tone="danger"
+                            />
                           </GlassCardTitle>
                         </GlassCardHeader>
                         <GlassCardContent>
@@ -1016,15 +1041,21 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                     >
                       <GlassCard variant="info" intensity="medium" className="hover:shadow-blue-500/10 transition-all duration-300">
                         <GlassCardHeader className="pb-3">
-                          <GlassCardTitle className="flex items-center gap-3 text-xl">
-                            <motion.div
-                              animate={{ scale: [1, 1.05, 1] }}
-                              transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-                              className="p-2 rounded-xl bg-blue-500/20 border border-blue-500/30"
-                            >
-                              <ListChecks className="w-5 h-5 text-blue-400" /> 
-                            </motion.div>
-                            Fact Verification
+                          <GlassCardTitle className="flex items-center justify-between gap-3 text-xl">
+                            <div className="flex items-center gap-3">
+                              <motion.div
+                                animate={{ scale: [1, 1.05, 1] }}
+                                transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                                className="p-2 rounded-xl bg-blue-500/20 border border-blue-500/30"
+                              >
+                                <ListChecks className="w-5 h-5 text-blue-400" /> 
+                              </motion.div>
+                              Fact Verification
+                            </div>
+                            <CardHelper 
+                              message='"Unverified" ≠ false — it means no clear evidence found in available sources.'
+                              tone="warning"
+                            />
                           </GlassCardTitle>
                         </GlassCardHeader>
                         <GlassCardContent>
@@ -1119,9 +1150,15 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                 {/* Summary */}
                 <GlassCard variant="info" intensity="medium" className="md:col-span-2 hover:shadow-indigo-500/10 transition-all duration-300">
                   <GlassCardHeader className="pb-3">
-                    <GlassCardTitle className="flex items-center gap-2 text-xl">
-                      <Globe className="w-6 h-6" /> 
-                      Audit Summary
+                    <GlassCardTitle className="flex items-center justify-between gap-2 text-xl">
+                      <div className="flex items-center gap-2">
+                        <Globe className="w-6 h-6" /> 
+                        Audit Summary
+                      </div>
+                      <CardHelper 
+                        message="The summary condenses the article's main claims while highlighting manipulation, bias, and missing angles detected in the audit."
+                        tone="neutral"
+                      />
                     </GlassCardTitle>
                   </GlassCardHeader>
                   <GlassCardContent>
@@ -1142,10 +1179,16 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                 {/* Sources */}
                 <Card className="bg-white/10 border-white/15 backdrop-blur-xl rounded-3xl shadow-2xl">
                   <CardHeader className="pb-3">
-                    <CardTitle className="flex items-center gap-2 text-xl">
+                  <CardTitle className="flex items-center justify-between gap-2 text-xl">
+                    <div className="flex items-center gap-2">
                       <Link2 className="w-6 h-6" /> 
                       Sources
-                    </CardTitle>
+                    </div>
+                    <CardHelper 
+                      message="Citations link directly to original reporting or external verification for transparency."
+                      tone="neutral"
+                    />
+                  </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3 max-h-40 overflow-y-auto custom-scrollbar">
