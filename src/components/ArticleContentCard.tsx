@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FileText, X, Eye, Sun, Moon, AlertTriangle } from "lucide-react";
+import { FileText, X, Eye, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 interface ArticleContentCardProps {
@@ -26,27 +26,6 @@ export default function ArticleContentCard({
 }: ArticleContentCardProps) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
-  const [isDark, setIsDark] = useState(false);
-
-  // Initialize and manage dark mode
-  useEffect(() => {
-    // Check current dark mode state
-    const isDarkMode = document.documentElement.classList.contains('dark');
-    setIsDark(isDarkMode);
-  }, []);
-
-  const toggleDarkMode = () => {
-    const newDarkMode = !isDark;
-    setIsDark(newDarkMode);
-    
-    if (newDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  };
 
   const isLongContent = content.length > 800;
 
@@ -55,7 +34,7 @@ export default function ArticleContentCard({
       {/* Glassmorphic Card Container */}
       <div className="lg:col-span-3 p-6 rounded-3xl bg-white/10 dark:bg-gray-900/20 border border-white/15 dark:border-gray-700/30 backdrop-blur-xl shadow-2xl transition-all duration-300">
         
-        {/* Header with Dark Mode Toggle */}
+        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className="p-2 rounded-xl bg-indigo-500/20 border border-indigo-500/30">
@@ -66,39 +45,18 @@ export default function ArticleContentCard({
             </h3>
           </div>
           
-          {/* Dark Mode Toggle + Preview Button */}
-          <div className="flex items-center gap-2">
-            {content && (
-              <motion.button
-                onClick={() => setShowPreviewModal(true)}
-                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 border border-white/20 rounded-lg text-indigo-300 hover:text-indigo-200 transition-all duration-200"
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Eye className="w-4 h-4" />
-                Preview
-              </motion.button>
-            )}
-            
+          {/* Preview Button */}
+          {content && (
             <motion.button
-              onClick={toggleDarkMode}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 text-white text-sm shadow-md hover:from-purple-600 hover:to-indigo-700 transition-all duration-200"
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowPreviewModal(true)}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-purple-500/20 to-indigo-600/20 hover:from-purple-500/30 hover:to-indigo-600/30 border border-purple-500/30 text-purple-200 rounded-lg transition-all duration-200"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
             >
-              {isDark ? (
-                <>
-                  <Sun className="w-4 h-4" />
-                  Light
-                </>
-              ) : (
-                <>
-                  <Moon className="w-4 h-4" />
-                  Dark
-                </>
-              )}
+              <Eye className="w-4 h-4" />
+              Preview
             </motion.button>
-          </div>
+          )}
         </div>
 
         {/* SOLID Background Textarea - PERFECT READABILITY */}

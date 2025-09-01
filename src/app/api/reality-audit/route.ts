@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuditRequestSchema, RealityAuditSchema } from "@/lib/schemas";
 import { getCitations, getFactCheckSources } from "@/lib/tavily";
-import { checkSubscriptionStatus } from "@/lib/subscription-checker";
+import { checkSubscriptionStatus, incrementUsage } from "@/lib/subscription-checker";
 import { incrementUserUsage } from "@/lib/usage";
+import { checkAndIncrementUsage } from "@/utils/auditCountHelper";
 import { auth } from "@/lib/firebase-admin";
+import { adjustTruthScore, buildRefinedSummary, getTrustBadge, buildTransparencyReport, calculateConfidenceLevel } from "@/lib/scoring";
 import OpenAI from "openai";
 import { TavilyClient } from "tavily";
 import { Redis } from "@upstash/redis";
@@ -66,60 +68,89 @@ export async function POST(request: NextRequest) {
       }
     }
     
-    // Check subscription status if user is authenticated
+    // Check usage limits using Firestore if user is authenticated
+    let usageInfo = null;
     if (userId) {
-      const subscriptionStatus = await checkSubscriptionStatus(userId);
+      console.log(`📊 Checking usage for ${userId}...`);
       
-      console.log(`📊 Subscription check for ${userId}:`, {
-        planType: subscriptionStatus.planType,
-        auditsUsed: subscriptionStatus.auditsUsed,
-        auditsLimit: subscriptionStatus.auditsLimit,
-        auditsRemaining: subscriptionStatus.auditsRemaining,
-        isActive: subscriptionStatus.isActive
-      });
-      
-      // Block request if user has exceeded their limit
-      if (!subscriptionStatus.isActive) {
-        const limitError = (subscriptionStatus.planType === 'free' && subscriptionStatus.auditsRemaining === 0)
-          ? "Free plan limit reached. Upgrade to Pro to continue."
-          : "Usage limit exceeded";
-        return NextResponse.json({
-          error: limitError,
-          details: {
-            planType: subscriptionStatus.planType,
-            auditsUsed: subscriptionStatus.auditsUsed,
-            auditsLimit: subscriptionStatus.auditsLimit,
-            reason: subscriptionStatus.reason,
-            upgradeRequired: subscriptionStatus.planType === 'free'
-          }
-        }, { status: 402 }); // 402 Payment Required
+      try {
+        // Check and increment usage atomically
+        const usageResult = await checkAndIncrementUsage(userId);
+        
+        console.log(`📊 Usage check result:`, usageResult);
+        
+        if (!usageResult.allowed) {
+          const limitError = usageResult.plan === 'free'
+            ? "Free plan limit reached. Upgrade to continue."
+            : "Usage limit exceeded";
+            
+          return NextResponse.json({
+            error: limitError,
+            details: {
+              plan: usageResult.plan,
+              auditsUsed: usageResult.auditsUsed,
+              auditsLimit: usageResult.auditsLimit,
+              remaining: 0,
+              upgradeRequired: true
+            }
+          }, { status: 402 }); // 402 Payment Required
+        }
+        
+        // Store usage info for response
+        usageInfo = {
+          auditsUsed: usageResult.auditsUsed,
+          auditsRemaining: usageResult.remaining
+        };
+        
+        console.log(`✅ Usage incremented successfully: ${usageResult.auditsUsed} used, ${usageResult.remaining} remaining`);
+      } catch (usageError) {
+        console.error(`❌ Usage check failed:`, usageError);
+        // Allow audit to proceed but log the error
+        // In production, you might want to fail the request instead
       }
+    } else {
+      console.log(`⚠️ No user ID provided, proceeding with anonymous audit`);
     }
 
     // Parse and validate the request body
     const body = await request.json();
     const { content, metadata, url } = body;
     
-    if (!content && !url) {
-      return NextResponse.json({ error: "Missing content or URL" }, { status: 400 });
+    // Clean inputs
+    const textInput = content?.trim();
+    const urlInput = url?.trim();
+    
+    if (!textInput && !urlInput) {
+      return NextResponse.json({ error: "No content provided. Please paste text or provide a URL." }, { status: 400 });
     }
 
     const warnings: string[] = [];
 
-    // ✅ Force full article fetch if URL is provided
-    let articleText = content;
-    if (url) {
+    // ✅ Always prioritize pasted text if available
+    let articleText = textInput || "";
+    
+    // Only fetch from URL if no text was provided
+    if (!articleText && urlInput) {
       try {
-        console.log(`🔗 Auto-fetching full article from URL: ${url}`);
-        const fetchRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/fetch-article?url=${encodeURIComponent(url)}`);
+        console.log(`🔗 No text provided, fetching article from URL: ${urlInput}`);
+        const fetchRes = await fetch(`${process.env.NEXT_PUBLIC_APP_URL}/api/fetch-article?url=${encodeURIComponent(urlInput)}`);
         const data = await fetchRes.json();
+        
+        if (!fetchRes.ok) {
+          throw new Error(data.error || 'Failed to fetch article');
+        }
+        
         if (data?.content) {
           articleText = data.content;
-          console.log(`✅ Successfully fetched full article (${articleText.length} chars)`);
+          console.log(`✅ Successfully fetched article (${articleText.length} chars)`);
+        } else {
+          throw new Error('No content extracted from URL');
         }
-      } catch (err) {
-        console.warn("⚠️ Failed to auto-fetch full article, using snippet fallback");
-        warnings.push("Failed to fetch full article. Analysis based on provided snippet only.");
+      } catch (err: any) {
+        console.error("❌ Failed to fetch article:", err);
+        return NextResponse.json({ 
+          error: "Could not extract content from URL. Please paste the article text directly." 
+        }, { status: 400 });
       }
     }
 
@@ -188,18 +219,16 @@ export async function POST(request: NextRequest) {
         processing_time: processingTime
       };
 
-      // Count cache hits toward usage as well
+      // Add current usage info to cached response
       if (userId) {
         try {
-          const newUsageCount = await incrementUserUsage(userId);
           const subscriptionStatus = await checkSubscriptionStatus(userId);
-          console.log(`📈 Updated usage for ${userId}: ${newUsageCount} audits used, ${subscriptionStatus.auditsRemaining} remaining (cache)`);
           responseBody.usage = {
-            auditsUsed: newUsageCount,
+            auditsUsed: subscriptionStatus.auditsUsed,
             auditsRemaining: subscriptionStatus.auditsRemaining,
           };
         } catch (usageError) {
-          console.error('❌ Error updating usage on cache hit:', usageError);
+          console.error('❌ Error getting usage for cache hit:', usageError);
         }
       }
 
@@ -256,9 +285,26 @@ export async function POST(request: NextRequest) {
     // Validate the core result against our schema (citations etc.)
     const validatedResult = RealityAuditSchema.parse(resultWithWarnings);
     
+    // Apply scoring adjustments based on detected issues
+    const adjustedScore = adjustTruthScore(validatedResult);
+    const refinedSummary = buildRefinedSummary(validatedResult);
+    const trustBadge = getTrustBadge(validatedResult);
+    const transparencyReport = buildTransparencyReport(validatedResult);
+    const confidence = calculateConfidenceLevel(validatedResult);
+    
+    console.log(`🎯 Score adjustment: ${validatedResult.truth_score} → ${adjustedScore}`);
+    console.log(`🛡️ Trust badge: ${trustBadge.label} (${trustBadge.level})`);
+    console.log(`📊 Confidence level: ${confidence}%`);
+    
     // Add cache metadata and enriched sources (kept outside schema to avoid strict coupling)
     const resultForCache: any = {
       ...validatedResult,
+      truth_score_raw: validatedResult.truth_score,  // Keep original score
+      truth_score: adjustedScore,                     // Use adjusted score
+      refined_summary: refinedSummary,                // Add refined summary
+      trust_badge: trustBadge,                        // Add trust badge
+      transparency_report: transparencyReport,        // Add transparency
+      confidence_level: confidence / 100,             // Add confidence (as decimal for compatibility)
       sources,
     };
 
@@ -290,31 +336,13 @@ export async function POST(request: NextRequest) {
       console.log(`💾 Stored new audit in MEMORY cache with key: ${cacheKey}`);
     }
     
-    // Increment usage count if user is authenticated (only for successful audits)
-    if (userId) {
-      try {
-        const newUsageCount = await incrementUserUsage(userId);
-        const subscriptionStatus = await checkSubscriptionStatus(userId);
-        console.log(`📈 Updated usage for ${userId}: ${newUsageCount} audits used, ${subscriptionStatus.auditsRemaining} remaining`);
-        
-        // Add usage info to response
-        resultWithCache.usage = {
-          auditsUsed: newUsageCount,
-          auditsRemaining: subscriptionStatus.auditsRemaining
-        };
-        
-        // Signal audit completion for UI refresh
-        if (typeof window !== 'undefined') {
-          window.localStorage.setItem('audit-completed', Date.now().toString());
-        }
-      } catch (usageError) {
-        console.error('❌ Error updating usage:', usageError);
-        // Don't fail the request if usage tracking fails
-      }
+    // Add usage info to response
+    if (usageInfo) {
+      resultWithCache.usage = usageInfo;
     }
     
     console.log("✅ Audit completed successfully");
-    console.log("🎯 Truth Score:", validatedResult.truth_score);
+    console.log("🎯 Truth Score:", adjustedScore, `(raw: ${validatedResult.truth_score})`);
     console.log("🔍 Bias Patterns:", validatedResult.bias_patterns?.length || 0);
     console.log("❓ Missing Angles:", validatedResult.missing_angles?.length || 0);
     console.log("⚠️ Warnings:", validatedResult.warnings?.length || 0);

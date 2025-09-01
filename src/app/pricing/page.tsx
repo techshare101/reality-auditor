@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { useState } from "react";
 import { Loader2, Star, Zap, Shield } from "lucide-react";
 import MarketingLayout from "@/components/MarketingLayout";
+import PlanButton from "@/components/PlanButton";
 
 const tiers = [
   {
@@ -20,26 +21,26 @@ const tiers = [
     href: "/signup",
   },
   {
-    name: "Pro",
+    name: "Basic",
     price: "$19/mo",
     description: "For journalists, researchers, and fact-checkers.",
     features: [
-      "Unlimited audits",
+      "100+ audits per month",
       "Full audit lenses (bias, omissions, manipulation)",
       "Export to PDF/CSV",
       "Audit history library",
       "Priority queue (faster processing)",
     ],
-    cta: "Upgrade to Pro",
+    cta: "Upgrade to Basic",
     highlight: true,
-    priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID || "price_1S1tnbGnOgSIwPZhYfV3aFXe",
+    priceId: "price_1S2KmxGRxp9eu0DJrdcrLLNR",
   },
   {
     name: "Team",
     price: "$99/mo",
     description: "For newsrooms, NGOs, and legal teams.",
     features: [
-      "Everything in Pro",
+      "Everything in Basic",
       "5 team seats included",
       "Shared audit library",
       "Slack/Teams integration",
@@ -52,54 +53,6 @@ const tiers = [
 ];
 
 export default function PricingPage() {
-  const [loading, setLoading] = useState<string | null>(null);
-
-  const handleCheckout = async (priceId: string) => {
-    setLoading(priceId);
-    
-    try {
-      const response = await fetch("/api/checkout", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          priceId,
-          successUrl: `${window.location.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: `${window.location.origin}/cancel`,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create checkout session");
-      }
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error("No checkout URL returned");
-      }
-    } catch (error) {
-      console.error("Checkout error:", error);
-      alert("Something went wrong. Please try again.");
-    } finally {
-      setLoading(null);
-    }
-  };
-
-  const handleButtonClick = (tier: typeof tiers[0]) => {
-    if (tier.priceId) {
-      handleCheckout(tier.priceId);
-    } else if (tier.href) {
-      if (tier.href.startsWith("mailto:")) {
-        window.location.href = tier.href;
-      } else {
-        window.location.href = tier.href;
-      }
-    }
-  };
 
   return (
     <MarketingLayout title="Pricing - Reality Auditor" showBackToDashboard={true}>
@@ -178,26 +131,14 @@ export default function PricingPage() {
               ))}
             </ul>
 
-            <button
-              onClick={() => handleButtonClick(tier)}
-              disabled={loading === tier.priceId}
-              className={`w-full py-3 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 ${
-                tier.highlight
-                  ? "bg-gradient-to-r from-purple-500 to-indigo-600 text-white shadow-lg hover:scale-105 disabled:hover:scale-100"
-                  : "bg-gray-800 text-gray-200 border border-gray-600 hover:bg-gray-700"
-              } ${loading === tier.priceId ? "opacity-70 cursor-not-allowed" : ""}`}
+            <PlanButton 
+              plan={tier.name.toLowerCase() as "free" | "basic" | "team"}
+              priceId={tier.priceId}
             >
-              {loading === tier.priceId ? (
-                <>
-                  <Loader2 size={20} className="animate-spin" />
-                  Processing...
-                </>
-              ) : (
-                tier.cta
-              )}
-            </button>
+              {tier.cta}
+            </PlanButton>
 
-            {tier.name === "Pro" && (
+            {tier.name === "Basic" && (
               <p className="text-xs text-gray-400 mt-3 text-center">
                 Cancel anytime • Secure payment by Stripe
               </p>

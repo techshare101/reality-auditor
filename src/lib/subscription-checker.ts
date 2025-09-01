@@ -247,7 +247,7 @@ export async function resetUsage(userId: string): Promise<boolean> {
  */
 function getDefaultLimit(planType: string): number {
   switch (planType) {
-    case 'basic': return 50;
+    case 'basic': return 100;
     case 'pro': return 200;
     case 'enterprise': return 1000;
     case 'free':

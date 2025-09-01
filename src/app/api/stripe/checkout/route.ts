@@ -103,7 +103,9 @@ export async function POST(request: NextRequest) {
       // automatic_tax: { enabled: true }, // Disabled for test mode - enable when business address is set in Stripe Dashboard
       billing_address_collection: 'auto',
       metadata: {
+        userId: userId || 'anonymous',
         firebaseUid: userId || 'anonymous',
+        priceId: priceId,
         source: 'reality_auditor_upgrade',
       },
     };
@@ -125,6 +127,7 @@ export async function POST(request: NextRequest) {
     // Add subscription metadata
     sessionConfig.subscription_data = {
       metadata: {
+        userId: userId || 'anonymous',
         firebaseUid: userId || 'anonymous',
         plan: priceId,
       },

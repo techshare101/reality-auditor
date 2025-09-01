@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db as clientDb } from '@/lib/firebase';
 import { 
   CreditCard, 
   TrendingUp, 
@@ -13,12 +15,19 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
-  Sparkles
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserUsage } from '@/lib/usage';
 
@@ -36,6 +45,16 @@ interface SubscriptionData {
   currentPeriodEnd?: string;
 }
 
+function getPlanDisplayName(planType: string): string {
+  switch (planType) {
+    case 'free': return 'Free Plan';
+    case 'basic': return 'Basic Plan';
+    case 'pro': return 'Pro Plan';
+    case 'enterprise': return 'Enterprise Plan';
+    default: return 'Unknown Plan';
+  }
+}
+
 export default function SubscriptionCards() {
   const { user } = useAuth();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
@@ -46,6 +65,40 @@ export default function SubscriptionCards() {
   useEffect(() => {
     if (user) {
       fetchSubscriptionData();
+      
+      // Set up real-time listener for subscription changes
+      const unsubscribe = onSnapshot(
+        doc(clientDb, 'subscriptions', user.uid),
+        (snapshot) => {
+          if (snapshot.exists()) {
+            console.log('🔄 Real-time subscription update received');
+            const data = snapshot.data();
+            
+            // Map Firestore data to component state format
+            const currentPeriodEnd = data.currentPeriodEnd?.toDate();
+            const usagePercentage = data.auditsLimit > 0 ? (data.auditsUsed / data.auditsLimit) * 100 : 0;
+            
+            setSubscriptionData({
+              planType: data.planType || 'free',
+              planDisplayName: getPlanDisplayName(data.planType || 'free'),
+              auditsUsed: data.auditsUsed || 0,
+              auditsLimit: data.auditsLimit || 5,
+              auditsRemaining: Math.max(0, (data.auditsLimit || 5) - (data.auditsUsed || 0)),
+              usagePercentage,
+              isNearLimit: (Math.max(0, (data.auditsLimit || 5) - (data.auditsUsed || 0))) <= Math.ceil((data.auditsLimit || 5) * 0.1),
+              isActive: data.status === 'active' || data.planType === 'free',
+              subscriptionStatus: data.status || 'free',
+              currentPeriodEnd,
+              nextBillingDate: currentPeriodEnd?.toISOString(),
+            });
+          }
+        },
+        (error) => {
+          console.error('❌ Real-time subscription listener error:', error);
+        }
+      );
+      
+      return () => unsubscribe();
     }
   }, [user]);
 
@@ -516,7 +569,19 @@ export default function SubscriptionCards() {
                   <div className="space-y-2 text-sm text-purple-100/90">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-purple-400" />
-                      <span>50+ audits per month</span>
+                      <span>100+ audits per month</span>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Info className="w-3.5 h-3.5 text-purple-300/70 cursor-help" />
+                          </TooltipTrigger>
+                          <TooltipContent className="max-w-xs bg-slate-900/95 border border-purple-500/20">
+                            <p className="text-xs text-purple-100">
+                              Fair Use Policy applies — Reality Auditor reserves the right to prevent abuse by automated or excessive audit requests.
+                            </p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                     <div className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-purple-400" />

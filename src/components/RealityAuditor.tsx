@@ -37,6 +37,13 @@ import CollapsibleText from "@/components/CollapsibleText";
 import ArticleContentCard from "@/components/ArticleContentCard";
 import { useAuditCache } from "@/lib/useAuditCache";
 import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outlets";
+import { getWarningLevel, getDynamicWarnings } from '@/lib/warnings';
+import { 
+  ClaimResult as AuditClaimResult,
+  getVerdictEmoji,
+  getVerdictLabel,
+  formatCitationDisplay
+} from '@/utils/auditScoring';
 
 const demoText = `Breaking: New policy claims to reduce emissions by 50% in two years. Officials did not release methodology. Independent analysts argue baseline year was cherry-picked and offsets account for most reductions. The policy has broad support among environmental groups but faces criticism from industry leaders who claim it will hurt the economy. No peer-reviewed studies have validated the proposed approach.`;
 
@@ -272,8 +279,15 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
     setData(null);
     setProgress(0);
     
-    if (!url && !content.trim()) {
-      setError("Provide a URL or paste article/transcript text.");
+    // Clean inputs
+    const textInput = content?.trim();
+    const urlInput = url?.trim();
+    
+    // Always prioritize pasted text if available
+    const contentToAudit = textInput || "";
+    
+    if (!contentToAudit && !urlInput) {
+      setError("No article content or URL provided. Please paste text or enter a URL.");
       return;
     }
     
@@ -298,8 +312,10 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
       }
       
       const auditRequest: AuditRequest = {
-        url: url || undefined,
-        content: content || undefined,
+        // Always send text if present
+        content: contentToAudit || undefined,
+        // Send URL only if no text provided
+        url: !contentToAudit ? urlInput : undefined,
         metadata: Object.values(metadata).some(v => v.trim()) ? metadata : undefined
       };
       
@@ -309,14 +325,14 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
       
       // Check if this is an error response
       if ('error' in result) {
-        if (result.error === 'LIMIT_EXCEEDED') {
+        if (result.error === 'LIMIT_EXCEEDED' || result.details?.upgradeRequired) {
           // Show upgrade prompt instead of error
           setShowUpgradePrompt(true);
           setLoading(false);
           return;
         } else {
           // Some other API error
-          setError(result.details?.error || "Audit failed. Please try again.");
+          setError(result.details?.error || result.error || "Audit failed. Please try again.");
           setLoading(false);
           return;
         }
@@ -641,58 +657,72 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
 
               {/* Truth Score & Key Metrics */}
               <div className={`grid gap-6 ${data.warnings && data.warnings.length > 0 ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
-                {/* Warnings Card - Only show if warnings exist */}
-                {data.warnings && data.warnings.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, scale: 0.9, y: 20 }}
-                    animate={{ opacity: 1, scale: 1, y: 0 }}
-                    transition={{ delay: 0.1, duration: 0.6, type: "spring", stiffness: 150 }}
-                  >
-                    <Card className="bg-gradient-to-br from-amber-500/20 via-yellow-600/15 to-orange-700/20 border-amber-500/40 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 group/warning hover:shadow-amber-500/20">
-                      <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2 text-2xl">
-                        <motion.div
-                          animate={{ 
-                            scale: [1, 1.2, 1],
-                            rotate: [0, -10, 10, 0] 
-                          }}
-                          transition={{ 
-                            repeat: Infinity, 
-                            duration: 2, 
-                            ease: "easeInOut" 
-                          }}
-                          className="p-2 rounded-xl bg-amber-500/20 border border-amber-500/30"
-                        >
-                          <AlertTriangle className="w-6 h-6 text-amber-300" /> 
-                        </motion.div>
-                        <span className="bg-gradient-to-r from-amber-200 to-yellow-100 bg-clip-text text-transparent">Warnings</span>
-                      </CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <div className="space-y-3 max-h-32 overflow-y-auto custom-scrollbar">
-                          {data.warnings.map((warning, i) => (
-                            <motion.div
-                              key={i}
-                              initial={{ opacity: 0, x: -10 }}
-                              animate={{ opacity: 1, x: 0 }}
-                              transition={{ delay: 0.2 + i * 0.1 }}
-                              className="flex items-start gap-3 p-3 rounded-xl bg-gradient-to-r from-amber-500/15 to-orange-500/10 border border-amber-500/25 backdrop-blur-sm hover:shadow-lg hover:shadow-amber-500/10 transition-all duration-200 group"
-                            >
-                              <motion.div 
-                                animate={{ scale: [1, 1.2, 1] }}
-                                transition={{ repeat: Infinity, duration: 1.5 }}
-                                className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0 mt-1"
-                              />
-                              <span className="text-amber-100 text-base font-medium group-hover:text-amber-50 transition-colors leading-relaxed">
-                                {warning}
-                              </span>
-                            </motion.div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                )}
+                {/* Warnings Card - Dynamic based on confidence */}
+                {(() => {
+                  const confidence = (data.confidence_level || 0) * 100;
+                  const warningLevel = getWarningLevel(confidence);
+                  const dynamicWarnings = getDynamicWarnings({
+                    confidence,
+                    factCheckResults: data.fact_check_results,
+                    citations: data.citations,
+                    missingAngles: data.missing_angles
+                  });
+                  
+                  // Always show warnings card with dynamic content
+                  return (
+                    <motion.div
+                      initial={{ opacity: 0, scale: 0.9, y: 20 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      transition={{ delay: 0.1, duration: 0.6, type: "spring", stiffness: 150 }}
+                    >
+                      <Card className={`bg-gradient-to-br ${warningLevel.color} ${warningLevel.borderColor} backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden transition-all duration-300 group/warning hover:${warningLevel.bgGlow}`}>
+                        <CardHeader className="pb-3">
+                        <CardTitle className="flex items-center gap-2 text-2xl">
+                          <motion.div
+                            animate={{ 
+                              scale: [1, 1.2, 1],
+                              rotate: [0, -10, 10, 0] 
+                            }}
+                            transition={{ 
+                              repeat: Infinity, 
+                              duration: 2, 
+                              ease: "easeInOut" 
+                            }}
+                            className={`p-2 rounded-xl bg-gradient-to-br ${warningLevel.color} border ${warningLevel.borderColor}`}
+                          >
+                            <span className="text-2xl">{warningLevel.icon}</span>
+                          </motion.div>
+                          <span className={`bg-gradient-to-r ${warningLevel.color} bg-clip-text text-transparent font-bold`}>
+                            {confidence >= 90 ? 'Verification' : 'Warnings'}
+                          </span>
+                        </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-3 max-h-32 overflow-y-auto custom-scrollbar">
+                            {dynamicWarnings.map((warning, i) => (
+                              <motion.div
+                                key={i}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.2 + i * 0.1 }}
+                                className={`flex items-start gap-3 p-3 rounded-xl bg-gradient-to-r ${warningLevel.color} border ${warningLevel.borderColor} backdrop-blur-sm hover:shadow-lg hover:${warningLevel.bgGlow} transition-all duration-200 group`}
+                              >
+                                <motion.div 
+                                  animate={{ scale: [1, 1.2, 1] }}
+                                  transition={{ repeat: Infinity, duration: 1.5 }}
+                                  className={`w-2 h-2 rounded-full ${warningLevel.iconColor} flex-shrink-0 mt-1`}
+                                />
+                                <span className={`${warningLevel.textColor} text-base font-medium group-hover:opacity-90 transition-colors leading-relaxed`}>
+                                  {warning}
+                                </span>
+                              </motion.div>
+                            ))}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  );
+                })()}
 
                 {/* Truth Score - Enhanced with Stunning Animation */}
                 <motion.div
@@ -724,6 +754,21 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                           <ShieldCheck className="w-5 h-5" /> 
                         </motion.div>
                         <span className="bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">Truth Score</span>
+                        
+                        {/* Trust Badge */}
+                        {(data as any).trust_badge && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.5, type: "spring", stiffness: 200 }}
+                            className="ml-auto"
+                          >
+                            <Badge className={`bg-gradient-to-r ${(data as any).trust_badge.color} text-white border-0 px-3 py-1 text-xs font-semibold shadow-lg`}>
+                              <span className="mr-1">{(data as any).trust_badge.icon}</span>
+                              {(data as any).trust_badge.label}
+                            </Badge>
+                          </motion.div>
+                        )}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="relative">
@@ -800,7 +845,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                           Multi-lens AI verification
                         </motion.p>
                         
-                        {data.confidence_level && (
+                        {data.confidence_level !== undefined && (
                           <motion.div 
                             initial={{ opacity: 0, scale: 0.9 }}
                             animate={{ opacity: 1, scale: 1 }}
@@ -816,12 +861,21 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                               <span className="text-xs text-white/60 group-hover/truth:text-white/80 transition-colors">
                                 Confidence: 
                                 <motion.span 
-                                  className="font-semibold text-blue-300"
+                                  className={`font-semibold ${
+                                    (data.confidence_level * 100) >= 90 ? 'text-green-300' :
+                                    (data.confidence_level * 100) >= 60 ? 'text-yellow-300' :
+                                    'text-orange-300'
+                                  }`}
                                   animate={{ opacity: [0.7, 1, 0.7] }}
                                   transition={{ repeat: Infinity, duration: 2 }}
                                 >
                                   {(data.confidence_level * 100).toFixed(0)}%
                                 </motion.span>
+                                <span className="ml-1 text-white/50">
+                                  {(data.confidence_level * 100) >= 90 ? ' ✅ High' :
+                                   (data.confidence_level * 100) >= 60 ? ' ⚠️ Medium' :
+                                   ' ❓ Low'}
+                                </span>
                               </span>
                             </div>
                           </motion.div>
@@ -953,7 +1007,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                     </motion.div>
                   )}
 
-                  {/* Fact Check Results - Truth Verification */}
+                  {/* Fact Check Results - Truth Verification with Citations */}
                   {data.fact_check_results && data.fact_check_results.length > 0 && (
                     <motion.div
                       initial={{ opacity: 0, x: 30, scale: 0.95 }}
@@ -975,58 +1029,83 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                         </GlassCardHeader>
                         <GlassCardContent>
                           <div className="space-y-4 max-h-44 overflow-y-auto custom-scrollbar">
-                            {data.fact_check_results.map((check, i) => (
-                              <motion.div
-                                key={i}
-                                initial={{ opacity: 0, y: 15, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                transition={{ 
-                                  delay: 0.7 + i * 0.15, 
-                                  duration: 0.5,
-                                  type: "spring",
-                                  stiffness: 150
-                                }}
-                                whileHover={{ scale: 1.02, y: -2 }}
-                                className="p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/2 border border-white/10 backdrop-blur-sm hover:shadow-lg transition-all duration-200 group/fact"
-                              >
-                                <div className="flex items-center gap-3 mb-3">
-                                  <motion.div
-                                    initial={{ scale: 0, rotate: -180 }}
-                                    animate={{ scale: 1, rotate: 0 }}
-                                    transition={{ delay: 0.8 + i * 0.1, type: "spring", stiffness: 200 }}
-                                  >
-                                    <Badge 
-                                      className={
-                                        check.verdict === 'true' 
-                                          ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 text-emerald-200 border-emerald-500/40 shadow-emerald-500/20 shadow-sm' :
-                                        check.verdict === 'false' 
-                                          ? 'bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-200 border-red-500/40 shadow-red-500/20 shadow-sm' :
-                                        check.verdict === 'misleading' 
-                                          ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-200 border-amber-500/40 shadow-amber-500/20 shadow-sm' :
-                                        'bg-gradient-to-r from-slate-500/20 to-gray-500/20 text-slate-200 border-slate-500/40'
-                                      }
+                            {(() => {
+                              // Process fact checks with citations
+                              const processedChecks = data.fact_check_results.map((check, index) => {
+                                const citation = data.citations?.[index];
+                                return {
+                                  ...check,
+                                  citation,
+                                  footnote: citation ? index + 1 : undefined
+                                };
+                              });
+                              
+                              return processedChecks.map((check, i) => (
+                                <motion.div
+                                  key={i}
+                                  initial={{ opacity: 0, y: 15, scale: 0.95 }}
+                                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                                  transition={{ 
+                                    delay: 0.7 + i * 0.15, 
+                                    duration: 0.5,
+                                    type: "spring",
+                                    stiffness: 150
+                                  }}
+                                  whileHover={{ scale: 1.02, y: -2 }}
+                                  className="p-4 rounded-xl bg-gradient-to-br from-white/5 to-white/2 border border-white/10 backdrop-blur-sm hover:shadow-lg transition-all duration-200 group/fact"
+                                >
+                                  <div className="flex items-center gap-3 mb-3">
+                                    <motion.div
+                                      initial={{ scale: 0, rotate: -180 }}
+                                      animate={{ scale: 1, rotate: 0 }}
+                                      transition={{ delay: 0.8 + i * 0.1, type: "spring", stiffness: 200 }}
                                     >
-                                      <motion.span
-                                        animate={{ opacity: [0.7, 1, 0.7] }}
-                                        transition={{ repeat: Infinity, duration: 2 }}
+                                      <Badge 
+                                        className={
+                                          check.verdict === 'true' 
+                                            ? 'bg-gradient-to-r from-emerald-500/20 to-green-500/20 text-emerald-200 border-emerald-500/40 shadow-emerald-500/20 shadow-sm' :
+                                          check.verdict === 'false' 
+                                            ? 'bg-gradient-to-r from-red-500/20 to-rose-500/20 text-red-200 border-red-500/40 shadow-red-500/20 shadow-sm' :
+                                          check.verdict === 'misleading' 
+                                            ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-200 border-amber-500/40 shadow-amber-500/20 shadow-sm' :
+                                          'bg-gradient-to-r from-slate-500/20 to-gray-500/20 text-slate-200 border-slate-500/40'
+                                        }
                                       >
-                                        {check.verdict.toUpperCase()}
-                                      </motion.span>
-                                    </Badge>
-                                  </motion.div>
-                                </div>
-                                <div className="space-y-2">
-                                  <p className="text-sm text-white leading-relaxed group-hover/fact:text-white transition-colors">
-                                    <span className="text-white/60 text-xs uppercase tracking-wider">CLAIM:</span><br />
-                                    <span className="font-medium">{check.claim}</span>
-                                  </p>
-                                  <p className="text-xs text-white/80 leading-relaxed group-hover/fact:text-white transition-colors">
-                                    <span className="text-white/60 uppercase tracking-wider">EVIDENCE:</span><br />
-                                    {check.evidence}
-                                  </p>
-                                </div>
-                              </motion.div>
-                            ))}
+                                        <motion.span
+                                          animate={{ opacity: [0.7, 1, 0.7] }}
+                                          transition={{ repeat: Infinity, duration: 2 }}
+                                        >
+                                          {getVerdictEmoji(check.verdict as any)} {getVerdictLabel(check.verdict as any)}
+                                        </motion.span>
+                                      </Badge>
+                                    </motion.div>
+                                  </div>
+                                  <div className="space-y-2">
+                                    <p className="text-sm text-white leading-relaxed group-hover/fact:text-white transition-colors">
+                                      <span className="text-white/60 text-xs uppercase tracking-wider">CLAIM:</span><br />
+                                      <span className="font-medium">
+                                        {check.claim}
+                                        {check.citation && (
+                                          <a
+                                            href={check.citation}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="ml-1 text-blue-400 hover:text-blue-300 text-xs align-super"
+                                            title={formatCitationDisplay(check.citation)}
+                                          >
+                                            [{check.footnote}]
+                                          </a>
+                                        )}
+                                      </span>
+                                    </p>
+                                    <p className="text-xs text-white/80 leading-relaxed group-hover/fact:text-white transition-colors">
+                                      <span className="text-white/60 uppercase tracking-wider">EVIDENCE:</span><br />
+                                      {check.evidence}
+                                    </p>
+                                  </div>
+                                </motion.div>
+                              ));
+                            })()}
                           </div>
                         </GlassCardContent>
                       </GlassCard>
@@ -1052,7 +1131,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                       transition={{ delay: 0.2 }}
                     >
                       <CollapsibleText 
-                        text={data.summary} 
+                        text={(data as any).refined_summary || data.summary} 
                         title="Audit Summary" 
                         className=""
                       />

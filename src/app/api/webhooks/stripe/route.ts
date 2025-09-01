@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { stripe } from '@/lib/stripe';
 import { headers } from 'next/headers';
+import { db } from '@/lib/firebase-admin';
+import { sendUsageResetEmail } from '@/lib/email';
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -79,6 +81,11 @@ export async function POST(req: NextRequest) {
       case 'invoice.payment_succeeded': {
         const invoice = event.data.object;
         console.log('✅ Invoice paid:', invoice.id);
+        
+        // Reset usage for recurring payments (not first payment)
+        if (invoice.subscription && invoice.billing_reason === 'subscription_cycle') {
+          await handleUsageReset(invoice);
+        }
         break;
       }
 
@@ -116,48 +123,169 @@ async function handleSubscriptionCreated({
   customerEmail?: string | null;
   sessionId: string;
 }) {
-  // TODO: Implement your database logic here
-  // For example, using Prisma, Supabase, or MongoDB:
-  
-  /*
-  await db.user.upsert({
-    where: { stripeCustomerId: customerId },
-    update: {
-      subscriptionStatus: 'active',
-      stripeSubscriptionId: subscriptionId,
-      planType: 'PRO',
-    },
-    create: {
-      email: customerEmail,
-      stripeCustomerId: customerId,
-      stripeSubscriptionId: subscriptionId,
-      subscriptionStatus: 'active',
-      planType: 'PRO',
-    },
-  });
-  */
-  
-  console.log('🔄 TODO: Update user subscription in database', {
-    customerId,
-    subscriptionId,
-    customerEmail,
-    sessionId,
-  });
+  try {
+    // Find user by customer ID
+    const usersSnapshot = await db.collection('subscriptions')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    
+    if (!usersSnapshot.empty) {
+      const userId = usersSnapshot.docs[0].id;
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ['items.data.price.product']
+      });
+      
+      const priceId = subscription.items.data[0]?.price.id;
+      const plan = getPlanFromPriceId(priceId);
+      const auditLimit = getAuditLimitForPlan(plan);
+      
+      // Update subscription data
+      await db.collection('subscriptions').doc(userId).update({
+        stripeSubscriptionId: subscriptionId,
+        plan,
+        status: 'active',
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        updatedAt: new Date()
+      });
+      
+      // Update usage record
+      await db.collection('usage').doc(userId).update({
+        plan,
+        audit_limit: auditLimit,
+        audits_used: 0, // Reset on new subscription
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ Subscription created and usage reset for user:', userId);
+    }
+  } catch (error) {
+    console.error('❌ Error handling subscription creation:', error);
+  }
 }
 
 async function handleSubscriptionUpdated(subscription: any) {
-  // TODO: Handle subscription updates
-  console.log('🔄 TODO: Handle subscription update', {
-    subscriptionId: subscription.id,
-    status: subscription.status,
-    customerId: subscription.customer,
-  });
+  try {
+    const customerId = subscription.customer;
+    const usersSnapshot = await db.collection('subscriptions')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    
+    if (!usersSnapshot.empty) {
+      const userId = usersSnapshot.docs[0].id;
+      const priceId = subscription.items.data[0]?.price.id;
+      const plan = getPlanFromPriceId(priceId);
+      const auditLimit = getAuditLimitForPlan(plan);
+      
+      // Update subscription data
+      await db.collection('subscriptions').doc(userId).update({
+        plan,
+        status: subscription.status,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000),
+        updatedAt: new Date()
+      });
+      
+      // Update usage record with new plan limits
+      const usageDoc = await db.collection('usage').doc(userId).get();
+      const currentUsage = usageDoc.data()?.audits_used || 0;
+      
+      await db.collection('usage').doc(userId).update({
+        plan,
+        audit_limit: auditLimit,
+        // Keep current usage unless it exceeds new limit
+        audits_used: Math.min(currentUsage, auditLimit),
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ Subscription updated for user:', userId, 'New plan:', plan);
+    }
+  } catch (error) {
+    console.error('❌ Error handling subscription update:', error);
+  }
 }
 
 async function handleSubscriptionCancelled(subscription: any) {
-  // TODO: Handle subscription cancellation
-  console.log('🔄 TODO: Handle subscription cancellation', {
-    subscriptionId: subscription.id,
-    customerId: subscription.customer,
-  });
+  try {
+    const customerId = subscription.customer;
+    const usersSnapshot = await db.collection('subscriptions')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    
+    if (!usersSnapshot.empty) {
+      const userId = usersSnapshot.docs[0].id;
+      
+      // Update subscription status
+      await db.collection('subscriptions').doc(userId).update({
+        status: 'cancelled',
+        plan: 'free',
+        updatedAt: new Date()
+      });
+      
+      // Revert to free plan limits
+      await db.collection('usage').doc(userId).update({
+        plan: 'free',
+        audit_limit: 5,
+        updatedAt: new Date()
+      });
+      
+      console.log('✅ Subscription cancelled, user reverted to free plan:', userId);
+    }
+  } catch (error) {
+    console.error('❌ Error handling subscription cancellation:', error);
+  }
+}
+
+// Handle monthly usage reset on successful invoice payment
+async function handleUsageReset(invoice: any) {
+  try {
+    const customerId = invoice.customer;
+    const usersSnapshot = await db.collection('subscriptions')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    
+    if (!usersSnapshot.empty) {
+      const userId = usersSnapshot.docs[0].id;
+      const userData = usersSnapshot.docs[0].data();
+      const plan = userData.plan || 'basic';
+      const auditLimit = getAuditLimitForPlan(plan);
+      
+      // Reset usage counter
+      await db.collection('usage').doc(userId).update({
+        audits_used: 0,
+        last_reset: new Date(),
+        updatedAt: new Date()
+      });
+      
+      // Send usage reset email notification
+      await sendUsageResetEmail(userId, plan, auditLimit);
+      
+      console.log(`✅ Usage reset for user ${userId} on ${plan} plan (${auditLimit} audits)`);
+    }
+  } catch (error) {
+    console.error('❌ Error handling usage reset:', error);
+  }
+}
+
+// Helper function to map Stripe price IDs to plan names
+function getPlanFromPriceId(priceId: string): string {
+  const priceMap: Record<string, string> = {
+    [process.env.NEXT_PUBLIC_STRIPE_BASIC_PRICE_ID || '']: 'basic',
+    [process.env.NEXT_PUBLIC_STRIPE_PRO_PRICE_ID || '']: 'pro',
+    [process.env.NEXT_PUBLIC_STRIPE_TEAM_PRICE_ID || '']: 'team',
+  };
+  return priceMap[priceId] || 'basic';
+}
+
+// Helper function to get audit limits for each plan
+function getAuditLimitForPlan(plan: string): number {
+  const limits: Record<string, number> = {
+    free: 5,
+    basic: 30,
+    pro: 100,
+    team: 500,
+  };
+  return limits[plan] || 5;
 }
