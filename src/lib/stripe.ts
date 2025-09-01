@@ -2,7 +2,7 @@ import Stripe from 'stripe';
 import { loadStripe } from '@stripe/stripe-js';
 
 // Server-side Stripe instance
-export const STRIPE_API_VERSION = '2024-06-20';
+export const STRIPE_API_VERSION = '2025-08-27.basil' as const;
 const STRIPE_KEY = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_TEST_SECRET_KEY;
 if (!STRIPE_KEY) {
   // eslint-disable-next-line no-console
