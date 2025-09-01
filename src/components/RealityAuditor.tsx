@@ -36,6 +36,8 @@ import { RealityAudit, AuditRequest } from "@/lib/schemas";
 import CollapsibleText from "@/components/CollapsibleText";
 import ArticleContentCard from "@/components/ArticleContentCard";
 import { useAuditCache } from "@/lib/useAuditCache";
+import { useAuth } from "@/contexts/AuthContext";
+import { useAuditLimit } from "@/hooks/useAuditLimit";
 import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outlets";
 import { getWarningLevel, getDynamicWarnings } from '@/lib/warnings';
 import { 
@@ -159,6 +161,8 @@ function getTruthScoreGradient(score: number): string {
 }
 
 export default function RealityAuditorApp({ initialData, demoMode }: { initialData?: any; demoMode?: boolean }) {
+  const { user } = useAuth();
+  const { count: auditCount, increment: incrementAuditCount, isOverLimit, remaining } = useAuditLimit(5);
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [metadata, setMetadata] = useState({
@@ -276,6 +280,13 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   }, []);
 
   async function onAudit() {
+    // Check hard limit first
+    if (isOverLimit) {
+      console.log(`🚫 Audit limit reached: ${auditCount}/5`);
+      setShowUpgradePrompt(true);
+      return;
+    }
+    
     setError(null);
     setData(null);
     setProgress(0);
@@ -320,8 +331,15 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
         metadata: Object.values(metadata).some(v => v.trim()) ? metadata : undefined
       };
       
-      // Get auth token if available
-      const authToken = typeof window !== 'undefined' ? localStorage.getItem('authToken') : null;
+      // Get auth token from Firebase if available
+      let authToken = null;
+      if (user) {
+        try {
+          authToken = await user.getIdToken();
+        } catch (err) {
+          console.error('Failed to get auth token:', err);
+        }
+      }
       const result = await postAudit(auditRequest, authToken || undefined);
       
       // Check if this is an error response
@@ -350,6 +368,10 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
       setProgress(100);
       setCurrentStep("Complete!");
 
+      // Increment local audit count on successful audit
+      incrementAuditCount();
+      console.log(`✅ Audit complete. New count: ${auditCount + 1}/5`);
+
       // Save to local cache (last 5)
       try {
         addAudit({ url: auditRequest.url || 'pasted-content', result });
@@ -365,6 +387,11 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
           key: 'audit-completed',
           newValue: Date.now().toString()
         }));
+        // Also dispatch custom event for same-window updates
+        window.dispatchEvent(new CustomEvent('audit-completed', {
+          detail: { timestamp: Date.now() }
+        }));
+        console.log('🚀 Dispatched audit-completed events');
       } catch (error) {
         console.log('Could not trigger subscription refresh:', error);
       }
