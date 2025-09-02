@@ -84,10 +84,10 @@ export async function POST(request: NextRequest) {
           ? new Date((subscription as any).current_period_end * 1000)
           : new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1, 0, 0, 0, 0));
 
-        // Update Firestore subscription document
-        const subscriptionRef = db.collection("subscriptions").doc(userId);
-        await subscriptionRef.set({
-          planType,
+        // Prepare subscription data
+        const subscriptionData = {
+          plan: planType,
+          planType, // Support both field names
           status: "active",
           auditsLimit: auditsLimit === null ? 999999 : auditsLimit, // Use large number for unlimited
           auditsUsed: 0, // Reset usage on new subscription
@@ -98,7 +98,22 @@ export async function POST(request: NextRequest) {
           currentPeriodStart: Timestamp.fromDate(monthStart),
           currentPeriodEnd: Timestamp.fromDate(currentPeriodEnd),
           updatedAt: Timestamp.now(),
-        }, { merge: true });
+        };
+
+        // Update BOTH UID and email documents to ensure sync
+        const subscriptionRef = db.collection("subscriptions").doc(userId);
+        await subscriptionRef.set(subscriptionData, { merge: true });
+        console.log(`✅ Updated subscription for UID: ${userId}`);
+        
+        // Also update by email if available
+        if (customerEmail) {
+          const emailRef = db.collection("subscriptions").doc(customerEmail);
+          await emailRef.set({
+            ...subscriptionData,
+            linkedToUid: userId, // Track the connection
+          }, { merge: true });
+          console.log(`✅ Updated subscription for email: ${customerEmail}`);
+        }
 
         // Also update the usage collection for real-time tracking
         const usageRef = db.collection("usage").doc(userId);

@@ -5,6 +5,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { LocalUsageTracker } from "@/lib/local-usage-tracker";
+import { hasPaidPlan } from "@/lib/hasPaidPlan";
 
 export function useHybridAuditLimit(defaultLimit: number = 5) {
   const { user } = useAuth();
@@ -28,39 +29,48 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
     setIsUsingLocalFallback(true);
     console.log(`📊 Initial local usage for ${user.uid}: ${localUsage.auditsUsed}/${defaultLimit}`);
 
-    // Then try to get Firestore data
+    // Check Pro status using bulletproof helper
+    const checkProStatus = async () => {
+      const planStatus = await hasPaidPlan(user);
+      setHasPaidSubscription(planStatus.isPro);
+      console.log(`🎯 Pro status check result:`, planStatus);
+    };
+    checkProStatus();
+
+    // Then listen to real-time Firestore data
     const unsubscribe = onSnapshot(
       doc(db, "subscriptions", user.uid),
-      (snapshot) => {
+      async (snapshot) => {
         if (snapshot.exists()) {
           const data = snapshot.data();
           const usage = data.usage || data.auditsUsed || 0;
           const planLimit = data.limit || data.auditsLimit || defaultLimit;
-          const planType = data.plan || data.planType || 'free';
-          const status = data.status || 'free';
-          
-          // Check if user has Pro plan - both planType and status should indicate Pro
-          const isPro = (planType === 'pro' || planType === 'basic') && status === 'active';
           
           setCount(usage);
           setLimit(planLimit);
-          setHasPaidSubscription(isPro);
           setIsUsingLocalFallback(false);
           
           // Sync local storage with Firestore
           LocalUsageTracker.syncWithFirestore(user.uid, usage);
           
+          // Re-check Pro status with bulletproof helper
+          const planStatus = await hasPaidPlan(user);
+          setHasPaidSubscription(planStatus.isPro);
+          
           console.log(`🔄 Firestore subscription data:`, {
-            planType,
-            status,
-            isPro,
+            ...planStatus,
             usage: `${usage}/${planLimit}`,
             rawData: data
           });
         } else {
-          // No subscription document exists, keep using local storage
-          console.log(`📝 No subscription document found, using local storage`);
-          setIsUsingLocalFallback(true);
+          // No subscription document exists, check if email has Pro
+          console.log(`📝 No subscription document found by UID, checking email...`);
+          const planStatus = await hasPaidPlan(user);
+          setHasPaidSubscription(planStatus.isPro);
+          
+          if (!planStatus.isPro) {
+            setIsUsingLocalFallback(true);
+          }
         }
         setLoading(false);
       },
