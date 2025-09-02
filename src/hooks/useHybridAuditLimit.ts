@@ -14,6 +14,12 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
   const [hasPaidSubscription, setHasPaidSubscription] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isUsingLocalFallback, setIsUsingLocalFallback] = useState(false);
+  
+  // HARDCODED PRO EMAILS - These emails ALWAYS get Pro treatment
+  const GUARANTEED_PRO_EMAILS = [
+    'valentin2v2000@gmail.com',
+    // Add more Pro emails here as needed
+  ];
 
   // Initialize with local storage data
   useEffect(() => {
@@ -31,6 +37,15 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
 
     // Check Pro status using bulletproof helper
     const checkProStatus = async () => {
+      // FIRST: Check if this is a guaranteed Pro email
+      if (user.email && GUARANTEED_PRO_EMAILS.includes(user.email.toLowerCase())) {
+        console.log(`✨ GUARANTEED PRO EMAIL DETECTED: ${user.email}`);
+        setHasPaidSubscription(true);
+        setLoading(false);
+        return;
+      }
+      
+      // Otherwise, check normally
       const planStatus = await checkHasPaidPlan(user);
       setHasPaidSubscription(planStatus.isPro);
       console.log(`🎯 Pro status check result:`, planStatus);
@@ -54,21 +69,31 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
           LocalUsageTracker.syncWithFirestore(user.uid, usage);
           
           // Re-check Pro status with bulletproof helper
-          const planStatus = await checkHasPaidPlan(user);
-          setHasPaidSubscription(planStatus.isPro);
+          // But ALWAYS respect guaranteed Pro emails
+          if (user.email && GUARANTEED_PRO_EMAILS.includes(user.email.toLowerCase())) {
+            setHasPaidSubscription(true);
+          } else {
+            const planStatus = await checkHasPaidPlan(user);
+            setHasPaidSubscription(planStatus.isPro);
+          }
           
           console.log(`🔄 Firestore subscription data:`, {
-            ...planStatus,
+            isPro: hasPaidSubscription,
             usage: `${usage}/${planLimit}`,
             rawData: data
           });
         } else {
           // No subscription document exists, check if email has Pro
           console.log(`📝 No subscription document found by UID, checking email...`);
-          const planStatus = await checkHasPaidPlan(user);
-          setHasPaidSubscription(planStatus.isPro);
+          // Check guaranteed Pro emails first
+          if (user.email && GUARANTEED_PRO_EMAILS.includes(user.email.toLowerCase())) {
+            setHasPaidSubscription(true);
+          } else {
+            const planStatus = await checkHasPaidPlan(user);
+            setHasPaidSubscription(planStatus.isPro);
+          }
           
-          if (!planStatus.isPro) {
+          if (!hasPaidSubscription) {
             setIsUsingLocalFallback(true);
           }
         }
