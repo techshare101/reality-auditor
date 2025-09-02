@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import Image from "next/image";
 import { 
   Globe, 
   FileText, 
@@ -51,14 +52,17 @@ import { CardHelper } from '@/components/ui/CardHelper';
 
 const demoText = `Breaking: New policy claims to reduce emissions by 50% in two years. Officials did not release methodology. Independent analysts argue baseline year was cherry-picked and offsets account for most reductions. The policy has broad support among environmental groups but faces criticism from industry leaders who claim it will hurt the economy. No peer-reviewed studies have validated the proposed approach.`;
 
-async function postAudit(payload: AuditRequest, authToken?: string): Promise<RealityAudit | { error: string; details?: any }> {
+async function postAudit(payload: AuditRequest, authToken?: string, isDemo: boolean = false): Promise<RealityAudit | { error: string; details?: any }> {
   try {
     const headers: any = { "Content-Type": "application/json" };
-    if (authToken) {
+    if (authToken && !isDemo) {
       headers["Authorization"] = `Bearer ${authToken}`;
     }
     
-    const res = await fetch("/api/reality-audit", {
+    // Use demo endpoint if in demo mode
+    const endpoint = isDemo ? "/api/demo-audit" : "/api/reality-audit";
+    
+    const res = await fetch(endpoint, {
       method: "POST",
       headers,
       body: JSON.stringify(payload),
@@ -292,11 +296,14 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   }, []);
 
   async function onAudit() {
-    // Check hard limit first
-    if (isOverLimit) {
-      console.log(`🚫 Audit limit reached: ${auditCount}/5`);
-      setShowUpgradePrompt(true);
-      return;
+    // Skip limit checks in demo mode
+    if (!demoMode) {
+      // Check hard limit first
+      if (isOverLimit) {
+        console.log(`🚫 Audit limit reached: ${auditCount}/5`);
+        setShowUpgradePrompt(true);
+        return;
+      }
     }
     
     setError(null);
@@ -352,7 +359,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
           console.error('Failed to get auth token:', err);
         }
       }
-      const result = await postAudit(auditRequest, authToken || undefined);
+      const result = await postAudit(auditRequest, authToken || undefined, demoMode);
       
       // Check if this is an error response
       if ('error' in result) {
@@ -385,23 +392,25 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
       console.log(`📊 Current count: ${auditCount}/5 (will update via Firestore listener)`);
       
       // If result shows successful non-cached audit, increment local counter for hybrid hook
-      if (result.cache_status === 'miss' && user) {
+      if (result.cache_status === 'miss' && user && !demoMode) {
         incrementUsage();
         console.log('📈 Incremented local usage counter');
       }
 
-      // Save to localStorage recent audits
-      try {
-        addRecentAudit({
-          id: Date.now().toString(), // Generate a unique ID
-          url: auditRequest.url || url || undefined,
-          content: auditRequest.content,
-          result: result,
-          metadata: metadata
-        });
-        console.log('✅ Audit saved to recent audits');
-      } catch (err) {
-        console.warn('Failed to save to recent audits:', err);
+      // Save to localStorage recent audits (skip in demo mode)
+      if (!demoMode) {
+        try {
+          addRecentAudit({
+            id: Date.now().toString(), // Generate a unique ID
+            url: auditRequest.url || url || undefined,
+            content: auditRequest.content,
+            result: result,
+            metadata: metadata
+          });
+          console.log('✅ Audit saved to recent audits');
+        } catch (err) {
+          console.warn('Failed to save to recent audits:', err);
+        }
       }
       
       // Trigger subscription data refresh
@@ -453,7 +462,34 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
 
   return (
     <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black text-white p-4 md:p-8">
-      <div className="mx-auto max-w-7xl">
+      {/* Demo Mode Banner */}
+      {demoMode && (
+        <motion.div
+          initial={{ opacity: 0, y: -20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-0 left-0 right-0 z-50 bg-gradient-to-r from-yellow-500/20 to-amber-500/20 backdrop-blur-xl border-b border-yellow-500/30"
+        >
+          <div className="max-w-7xl mx-auto px-4 py-3 text-center">
+            <div className="flex items-center justify-center gap-2">
+              <motion.span
+                animate={{ rotate: [0, 10, -10, 0] }}
+                transition={{ repeat: Infinity, duration: 2 }}
+                className="text-2xl"
+              >
+                🎭
+              </motion.span>
+              <span className="text-yellow-200 font-semibold">
+                Demo Mode Active — Results are simulated for demonstration purposes
+              </span>
+              <Badge className="bg-yellow-500/20 text-yellow-200 border-yellow-500/30 ml-2">
+                No login required
+              </Badge>
+            </div>
+          </div>
+        </motion.div>
+      )}
+      
+      <div className="mx-auto max-w-7xl" style={{ paddingTop: demoMode ? '4rem' : '0' }}>
         {/* Header */}
         <motion.div 
           initial={{ opacity: 0, y: -20 }} 
@@ -464,11 +500,24 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
           
           <div className="flex items-center justify-center gap-4 mb-4">
             <motion.div 
-              className="p-4 rounded-3xl bg-gradient-to-br from-white/20 to-white/10 border border-white/20 backdrop-blur-xl shadow-2xl"
+              className="relative w-16 h-16 md:w-20 md:h-20 rounded-3xl overflow-hidden bg-gradient-to-br from-purple-500 to-indigo-600 border border-white/20 backdrop-blur-xl shadow-2xl"
               whileHover={{ scale: 1.05, rotate: 5 }}
               transition={{ type: "spring", stiffness: 300 }}
             >
-              <Eye className="w-8 h-8" />
+              {/* Reality Auditor Logo - will show when logo.png is added to public folder */}
+              <Image
+                src="/logo.png"
+                alt="Reality Auditor Logo"
+                width={80}
+                height={80}
+                className="object-cover"
+                onError={(e) => {
+                  // Hide image on error and show fallback
+                  e.currentTarget.style.display = 'none';
+                  e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                }}
+              />
+              <Eye className="w-8 h-8 md:w-10 md:h-10 absolute inset-0 m-auto text-white hidden" />
             </motion.div>
             <div>
               <h1 className="text-4xl md:text-6xl font-bold bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent">
@@ -762,13 +811,26 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
               className="space-y-6"
             >
               {/* Cache Status Badge */}
-              {(data.cache_status || data.processing_time) && (
+              {(data.cache_status || data.processing_time || demoMode) && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.1, duration: 0.4 }}
-                  className="flex justify-end mb-4"
+                  className="flex justify-between mb-4"
                 >
+                  {/* Demo Mode Indicator */}
+                  {demoMode && (
+                    <motion.div
+                      animate={{ scale: [1, 1.05, 1] }}
+                      transition={{ repeat: Infinity, duration: 2 }}
+                      className="flex items-center gap-2"
+                    >
+                      <Badge className="bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/30 shadow-yellow-500/20 shadow-sm">
+                        🎭 Demo Result — Simulated for demonstration
+                      </Badge>
+                    </motion.div>
+                  )}
+                  
                   <div className="flex items-center gap-2">
                     {data.cache_status === "hit" && (
                       <Badge className="bg-gradient-to-r from-green-500/20 to-emerald-500/20 text-green-200 border-green-500/30 shadow-green-500/20 shadow-sm">
@@ -778,6 +840,11 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                     {data.cache_status === "miss" && (
                       <Badge className="bg-gradient-to-r from-blue-500/20 to-indigo-500/20 text-blue-200 border-blue-500/30 shadow-blue-500/20 shadow-sm">
                         🤖 Fresh Analysis
+                      </Badge>
+                    )}
+                    {data.cache_status === "demo" && (
+                      <Badge className="bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/30 shadow-yellow-500/20 shadow-sm">
+                        🎭 Demo Analysis
                       </Badge>
                     )}
                     {data.processing_time && (

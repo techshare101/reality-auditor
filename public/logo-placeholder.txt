@@ -1,0 +1,14 @@
+Reality Auditor Logo Placeholder
+================================
+
+To add your logo:
+
+1. Add your logo2.JPG file to the public folder
+2. Rename it to logo.png for better browser compatibility
+3. The dashboard and site will automatically use it
+
+For favicon generation:
+- Use the script at scripts/generate-favicon.js
+- Or use online tools like favicon.io/favicon-converter/
+
+The logo should be the eye+fingerprint Reality Auditor branding.

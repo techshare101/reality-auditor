@@ -3,7 +3,7 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect } from "react";
-import { User, LogOut } from "lucide-react";
+import { User, LogOut, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuditCache } from "@/lib/useAuditCache";
 import { useSearchParams } from "next/navigation";
@@ -14,6 +14,7 @@ import BillingDebugPanel from "@/components/BillingDebugPanel";
 import InfoModal from "@/components/InfoModal";
 import { showToast, ToastProvider } from "@/components/GlowingToast";
 import ToastContainer from "@/components/ToastContainer";
+import Image from "next/image";
 
 export default function DashboardClient() {
   const { user, logout } = useAuth();
@@ -80,13 +81,32 @@ export default function DashboardClient() {
       <div className="px-4 md:px-8 py-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent">
-                Dashboard
-              </h1>
-              <p className="text-white/70 mt-1">
-                Welcome back, {user.email}
-              </p>
+            <div className="flex items-start gap-3">
+              {/* Logo - will show when logo.png is added to public folder */}
+              <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-gradient-to-r from-purple-500 to-indigo-600 flex items-center justify-center shadow-lg">
+                {/* Check if logo exists, otherwise show fallback icon */}
+                <Image
+                  src="/logo.png"
+                  alt="Reality Auditor Logo"
+                  width={48}
+                  height={48}
+                  className="object-cover"
+                  onError={(e) => {
+                    // Hide image on error and show fallback
+                    e.currentTarget.style.display = 'none';
+                    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+                  }}
+                />
+                <Eye className="w-7 h-7 text-white hidden" />
+              </div>
+              <div>
+                <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-blue-100 to-indigo-200 bg-clip-text text-transparent flex items-center gap-2">
+                  Dashboard
+                </h1>
+                <p className="text-white/70 mt-1">
+                  Welcome back, {user.email}
+                </p>
+              </div>
             </div>
             
             <div className="flex items-center gap-3">

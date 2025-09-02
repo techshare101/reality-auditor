@@ -2,11 +2,15 @@
 
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Eye, Sparkles, TrendingUp, Search, AlertTriangle, CheckCircle } from "lucide-react";
+import { Eye, Sparkles, CheckCircle, TrendingUp, AlertTriangle, Search } from "lucide-react";
 import InfoModal from "@/components/InfoModal";
 import ComparisonTable from "@/components/ComparisonTable";
+import { DemoInviteModal } from "@/components/DemoInviteModal";
+import { useState } from "react";
 
 export default function LandingPage() {
+  const [showDemoInvite, setShowDemoInvite] = useState(false);
+  
   return (
     <div className="bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white">
       {/* Navigation */}
@@ -95,13 +99,13 @@ export default function LandingPage() {
               <Sparkles className="w-5 h-5" />
               Sign Up Free 🚀
             </Link>
-            <Link
-              href="/demo"
+            <button
+              onClick={() => setShowDemoInvite(true)}
               className="px-8 py-4 rounded-xl bg-gray-800 border border-gray-600 text-gray-200 hover:bg-gray-700 transition inline-flex items-center justify-center gap-2"
             >
               <Eye className="w-5 h-5" />
               Try Demo
-            </Link>
+            </button>
           </div>
         </motion.div>
       </section>
@@ -348,6 +352,14 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+      
+      {/* Demo Invite Modal */}
+      {showDemoInvite && (
+        <DemoInviteModal 
+          isOpen={showDemoInvite} 
+          onClose={() => setShowDemoInvite(false)} 
+        />
+      )}
     </div>
   );
 }

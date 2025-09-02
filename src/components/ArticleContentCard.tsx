@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { FileText, X, Eye, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DemoInviteModal } from "@/components/DemoInviteModal";
 
 interface ArticleContentCardProps {
   content: string;
@@ -26,6 +27,7 @@ export default function ArticleContentCard({
 }: ArticleContentCardProps) {
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showDemoInvite, setShowDemoInvite] = useState(false);
 
   const isLongContent = content.length > 800;
 
@@ -131,7 +133,7 @@ export default function ArticleContentCard({
           
           <Button 
             variant="secondary" 
-            onClick={onTryDemo} 
+            onClick={() => setShowDemoInvite(true)} 
             className="flex-1 h-12 bg-white/10 hover:bg-white/20 border border-white/20 text-white transition-all duration-200"
             disabled={loading}
           >
@@ -233,6 +235,12 @@ export default function ArticleContentCard({
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Demo Invite Modal */}
+      <DemoInviteModal
+        isOpen={showDemoInvite}
+        onClose={() => setShowDemoInvite(false)}
+      />
     </>
   );
 }
