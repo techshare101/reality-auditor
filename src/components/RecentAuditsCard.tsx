@@ -35,12 +35,83 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
 
   useEffect(() => {
     if (!user) {
+      console.log('❌ No user logged in, skipping audit fetch');
       setAudits([]);
       setLoading(false);
       return;
     }
 
-    console.log('🔍 Setting up audit listener for user:', user.uid);
+    console.log('🔍 Setting up audit listener for user:', {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName
+    });
+    
+    // First, let's try to get ALL audits without any filters to debug
+    console.log('🚀 DEBUG: Attempting to fetch ALL audits first...');
+    const debugQuery = query(
+      collection(db, 'audits'),
+      limit(10)
+    );
+    
+    // Debug: Get all audits to see what's in the collection
+    onSnapshot(debugQuery, 
+      (debugSnapshot) => {
+        console.log('🎯 DEBUG - All audits in collection:', debugSnapshot.size);
+        debugSnapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log('📄 DEBUG - Audit document:', {
+            id: doc.id,
+            userId: data.userId,
+            userEmail: data.userEmail,
+            uid: data.uid,
+            createdAt: data.createdAt,
+            url: data.url,
+            allFields: Object.keys(data)
+          });
+        });
+      },
+      (error) => {
+        console.error('❌ DEBUG - Error fetching all audits:', error);
+      }
+    );
+    
+    // Now try the user-specific query
+    console.log('🔍 Now trying user-specific query...');
+    
+    // Also try with user email in case that's how they're stored
+    console.log('🔍 Also trying query with user email:', user.email);
+    const emailQuery = query(
+      collection(db, 'audits'),
+      where('userEmail', '==', user.email),
+      limit(5)
+    );
+    
+    // Try email query to see if audits are stored by email
+    onSnapshot(emailQuery,
+      (emailSnapshot) => {
+        console.log('📧 Email query results:', emailSnapshot.size, 'documents');
+        if (emailSnapshot.size > 0) {
+          console.log('✅ Found audits by email! Processing...');
+          const auditData: Audit[] = [];
+          emailSnapshot.forEach((doc) => {
+            const data = doc.data();
+            auditData.push({
+              id: doc.id,
+              ...data,
+              createdAt: data.createdAt?.toDate() || new Date()
+            } as Audit);
+          });
+          // Sort manually in JavaScript
+          auditData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+          setAudits(auditData.slice(0, 5)); // Take top 5
+          setLoading(false);
+        }
+      },
+      (error) => {
+        console.error('❌ Email query error:', error);
+      }
+    );
     
     // First, try a simple query without ordering to see if we get any audits
     const simpleQuery = query(
