@@ -42,6 +42,16 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
 
     console.log('🔍 Setting up audit listener for user:', user.uid);
     
+    // First, try a simple query without ordering to see if we get any audits
+    const simpleQuery = query(
+      collection(db, 'audits'),
+      where('userId', '==', user.uid),
+      limit(5)
+    );
+    
+    // Try the simple query first to debug
+    console.log('🔍 Trying simple query first (no ordering)...');
+    
     // Set up real-time listener for user's audits
     const q = query(
       collection(db, 'audits'),
@@ -63,19 +73,49 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
             createdAt: data.createdAt?.toDate() || new Date()
           } as Audit);
         });
-        setAudits(auditData);
+        // Sort by createdAt manually if we get results
+        auditData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setAudits(auditData.slice(0, 5)); // Take top 5
         setLoading(false);
       },
       (error) => {
-        console.error('❌ Error fetching audits:', error);
+        console.error('❌ Error fetching audits with ordering:', error);
         // Check if it's an index error
-        if (error.message?.includes('index')) {
-          console.error('🔥 Firestore index required. Create a composite index for:', {
-            collection: 'audits',
-            fields: ['userId', 'createdAt DESC']
-          });
+        if (error.message?.includes('index') || error.message?.includes('requires an index')) {
+          console.error('🔥 Firestore index required, trying fallback query without ordering...');
+          
+          // Fallback: Try without ordering and sort manually
+          const fallbackUnsubscribe = onSnapshot(simpleQuery,
+            (snapshot) => {
+              console.log('📊 Fallback query succeeded! Got', snapshot.size, 'documents');
+              const auditData: Audit[] = [];
+              snapshot.forEach((doc) => {
+                const data = doc.data();
+                console.log('📄 Fallback audit doc:', doc.id, data);
+                auditData.push({
+                  id: doc.id,
+                  ...data,
+                  createdAt: data.createdAt?.toDate() || new Date()
+                } as Audit);
+              });
+              // Sort manually in JavaScript
+              auditData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+              setAudits(auditData.slice(0, 5)); // Take top 5
+              setLoading(false);
+            },
+            (fallbackError) => {
+              console.error('❌ Fallback query also failed:', fallbackError);
+              setLoading(false);
+            }
+          );
+          
+          // Return the fallback unsubscribe function
+          return () => fallbackUnsubscribe();
+        } else {
+          // Some other error
+          console.error('❌ Non-index error:', error);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
