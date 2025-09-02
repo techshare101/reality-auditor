@@ -842,11 +842,6 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                         🤖 Fresh Analysis
                       </Badge>
                     )}
-                    {data.cache_status === "demo" && (
-                      <Badge className="bg-gradient-to-r from-yellow-500/20 to-amber-500/20 text-yellow-200 border-yellow-500/30 shadow-yellow-500/20 shadow-sm">
-                        🎭 Demo Analysis
-                      </Badge>
-                    )}
                     {data.processing_time && (
                       <Badge className="bg-gradient-to-r from-slate-500/20 to-gray-500/20 text-slate-200 border-slate-500/30">
                         ⏱️ {data.processing_time}ms
