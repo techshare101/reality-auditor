@@ -5,7 +5,7 @@ import { doc, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { LocalUsageTracker } from "@/lib/local-usage-tracker";
-import { hasPaidPlan } from "@/lib/hasPaidPlan";
+import { hasPaidPlan as checkHasPaidPlan } from "@/lib/hasPaidPlan";
 
 export function useHybridAuditLimit(defaultLimit: number = 5) {
   const { user } = useAuth();
@@ -31,7 +31,7 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
 
     // Check Pro status using bulletproof helper
     const checkProStatus = async () => {
-      const planStatus = await hasPaidPlan(user);
+      const planStatus = await checkHasPaidPlan(user);
       setHasPaidSubscription(planStatus.isPro);
       console.log(`🎯 Pro status check result:`, planStatus);
     };
@@ -54,7 +54,7 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
           LocalUsageTracker.syncWithFirestore(user.uid, usage);
           
           // Re-check Pro status with bulletproof helper
-          const planStatus = await hasPaidPlan(user);
+          const planStatus = await checkHasPaidPlan(user);
           setHasPaidSubscription(planStatus.isPro);
           
           console.log(`🔄 Firestore subscription data:`, {
@@ -65,7 +65,7 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
         } else {
           // No subscription document exists, check if email has Pro
           console.log(`📝 No subscription document found by UID, checking email...`);
-          const planStatus = await hasPaidPlan(user);
+          const planStatus = await checkHasPaidPlan(user);
           setHasPaidSubscription(planStatus.isPro);
           
           if (!planStatus.isPro) {
