@@ -64,17 +64,14 @@ export async function hasPaidPlan(user: User | null): Promise<PlanStatus> {
           await setDoc(
             uidRef,
             {
+              // Copy all data from email doc first
+              ...emailData,
+              // Then override with correct values
               plan: emailPlan,
               planType: emailPlan, // Support both field names
               status: emailStatus,
               migratedFrom: user.email,
               updatedAt: serverTimestamp(),
-              // Copy all data from email doc
-              ...emailData,
-              // But ensure these fields are correct
-              plan: emailPlan,
-              planType: emailPlan,
-              status: emailStatus,
             },
             { merge: true }
           );
