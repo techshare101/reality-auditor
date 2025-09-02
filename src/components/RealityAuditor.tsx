@@ -21,7 +21,8 @@ import {
   Calendar,
   Building,
   CreditCard,
-  ArrowUpRight
+  ArrowUpRight,
+  CheckCircle
 } from "lucide-react";
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -463,42 +464,75 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
         </motion.div>
 
         {/* Audit Count Display */}
-        {(!user || !hasPaidPlan) && (
+        {user && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.15, duration: 0.6 }}
             className="flex justify-center mb-6"
           >
-            <div className="inline-flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-xl">
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-amber-400" />
-                <span className="text-white/80 font-medium">
-                  Free Audits Used: <span className="text-white font-bold">{auditCount}/5</span>
-                </span>
+            {hasPaidPlan ? (
+              /* Pro users see glowing green banner */
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.5 }}
+                className="relative overflow-hidden"
+              >
+                {/* Animated glow background */}
+                <div className="absolute inset-0 bg-gradient-to-r from-green-500/30 to-emerald-500/30 blur-xl animate-pulse" />
+                
+                {/* Main banner */}
+                <div className="relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-green-900/50 to-emerald-900/50 border-2 border-green-500/50 backdrop-blur-xl shadow-2xl shadow-green-500/20">
+                  <div className="relative">
+                    <div className="absolute inset-0 bg-green-400 blur-lg animate-pulse" />
+                    <CheckCircle className="relative w-6 h-6 text-green-400" />
+                  </div>
+                  <div className="text-center">
+                    <div className="text-green-200 font-bold text-lg">
+                      ✨ Unlimited Audits Active
+                    </div>
+                    <div className="text-green-300/70 text-sm mt-0.5">
+                      Thank you for being a Pro member!
+                    </div>
+                  </div>
+                  <div className="absolute top-1 right-2">
+                    <span className="text-xs text-green-400/50">PRO</span>
+                  </div>
+                </div>
+              </motion.div>
+            ) : (
+              /* Free users see progress bar */
+              <div className="inline-flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-xl">
+                <div className="flex items-center gap-2">
+                  <Zap className="w-5 h-5 text-amber-400" />
+                  <span className="text-white/80 font-medium">
+                    Free Audits Used: <span className="text-white font-bold">{auditCount}/5</span>
+                  </span>
+                </div>
+                <div className="h-2 w-32 bg-white/20 rounded-full overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(auditCount / 5) * 100}%` }}
+                    transition={{ duration: 0.5, ease: "easeOut" }}
+                    className={`h-full rounded-full ${
+                      auditCount >= 5 ? 'bg-red-500' : 
+                      auditCount >= 3 ? 'bg-amber-500' : 
+                      'bg-green-500'
+                    }`}
+                  />
+                </div>
+                {auditCount < 5 ? (
+                  <span className="text-sm text-white/60">
+                    {remaining} remaining this month
+                  </span>
+                ) : (
+                  <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
+                    Limit Reached
+                  </Badge>
+                )}
               </div>
-              <div className="h-2 w-32 bg-white/20 rounded-full overflow-hidden">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${(auditCount / 5) * 100}%` }}
-                  transition={{ duration: 0.5, ease: "easeOut" }}
-                  className={`h-full rounded-full ${
-                    auditCount >= 5 ? 'bg-red-500' : 
-                    auditCount >= 3 ? 'bg-amber-500' : 
-                    'bg-green-500'
-                  }`}
-                />
-              </div>
-              {auditCount < 5 ? (
-                <span className="text-sm text-white/60">
-                  {remaining} remaining this month
-                </span>
-              ) : (
-                <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
-                  Limit Reached
-                </Badge>
-              )}
-            </div>
+            )}
           </motion.div>
         )}
 
@@ -1456,7 +1490,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                 <div className="text-center mb-6">
                   <p className="text-white/60 mb-2">Starting at just</p>
                   <div className="flex items-baseline justify-center gap-1">
-                    <span className="text-4xl font-bold text-white">$29</span>
+                    <span className="text-4xl font-bold text-white">$19</span>
                     <span className="text-white/60">/month</span>
                   </div>
                 </div>
@@ -1464,7 +1498,19 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
                 {/* Actions */}
                 <div className="flex gap-3">
                   <Button
-                    onClick={() => window.location.href = '/dashboard'}
+                    onClick={async () => {
+                      try {
+                        const res = await fetch("/api/create-checkout-session", {
+                          method: "POST",
+                        });
+                        const { url } = await res.json();
+                        if (url) {
+                          window.location.href = url; // Direct to Stripe checkout
+                        }
+                      } catch (err) {
+                        console.error("Upgrade redirect failed:", err);
+                      }
+                    }}
                     className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all"
                     size="lg"
                   >

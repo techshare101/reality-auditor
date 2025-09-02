@@ -59,7 +59,8 @@ export async function POST(request: NextRequest) {
         let auditsLimit = 100;
 
         // Map price IDs to plans and limits
-        const priceToPlan: Record<string, { plan: string; limit: number }> = {
+        const priceToPlan: Record<string, { plan: string; limit: number | null }> = {
+          'price_1S2KmxGRxp9eu0DJrdcrLLNR': { plan: 'pro', limit: null }, // Pro plan with unlimited audits
           'price_1QUsqXRrC5nflManTGgCF3pY': { plan: 'basic', limit: 100 },
           'price_1QUstJRrC5nflManZvdQKFgJ': { plan: 'pro', limit: 500 },
           // Add your actual price IDs here
@@ -67,7 +68,7 @@ export async function POST(request: NextRequest) {
         
         const planInfo = priceToPlan[priceId || ''] || { plan: 'basic', limit: 100 };
         planType = planInfo.plan;
-        auditsLimit = planInfo.limit;
+        auditsLimit = planInfo.limit as number;
 
         // Get subscription details
         const subscriptionId = session.subscription as string;
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
         await subscriptionRef.set({
           planType,
           status: "active",
-          auditsLimit,
+          auditsLimit: auditsLimit === null ? 999999 : auditsLimit, // Use large number for unlimited
           auditsUsed: 0, // Reset usage on new subscription
           stripeCustomerId: session.customer as string,
           stripeSubscriptionId: subscriptionId,
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
         const usageRef = db.collection("usage").doc(userId);
         await usageRef.set({
           audits_used: 0,
-          audit_limit: auditsLimit,
+          audit_limit: auditsLimit === null ? 999999 : auditsLimit, // Use large number for unlimited
           plan: planType,
           last_reset: Timestamp.now(),
           subscription_active: true,
@@ -111,7 +112,7 @@ export async function POST(request: NextRequest) {
           billing_cycle_end: currentPeriodEnd.toISOString(),
         }, { merge: true });
 
-        console.log(`✅ Upgraded ${userId} to ${planType} plan with ${auditsLimit} audits/month`);
+        console.log(`✅ Upgraded ${userId} to ${planType} plan with ${auditsLimit === null ? 'unlimited' : auditsLimit} audits/month`);
         break;
       }
 

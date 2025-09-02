@@ -52,6 +52,7 @@ export async function POST(request: NextRequest) {
     // Get authorization header
     const authHeader = request.headers.get('Authorization');
     let userId = null;
+    let userEmail = null;
     
     // Check authentication (optional for demo mode, but required for usage tracking)
     if (authHeader?.startsWith('Bearer ')) {
@@ -59,7 +60,8 @@ export async function POST(request: NextRequest) {
         const idToken = authHeader.split('Bearer ')[1];
         const decodedToken = await auth.verifyIdToken(idToken);
         userId = decodedToken.uid;
-        console.log(`🔐 Authenticated user: ${userId}`);
+        userEmail = decodedToken.email || null;
+        console.log(`🔐 Authenticated user: ${userId} (${userEmail})`);
       } catch (authError) {
         console.warn('⚠️ Authentication failed, proceeding with anonymous access:', authError);
         // Don't fail the request - allow anonymous access with default limits
@@ -72,8 +74,8 @@ export async function POST(request: NextRequest) {
       console.log(`📊 Checking usage for ${userId}...`);
       
       try {
-        // Check subscription status first
-        const subscriptionStatus = await checkSubscriptionStatus(userId);
+        // Check subscription status first (with email for webhook compatibility)
+        const subscriptionStatus = await checkSubscriptionStatus(userId, userEmail || undefined);
         console.log(`📊 Subscription status:`, {
           isActive: subscriptionStatus.isActive,
           auditsUsed: subscriptionStatus.auditsUsed,

@@ -23,10 +23,31 @@ export interface UsageUpdateResult {
 /**
  * Check if user can perform an audit based on their subscription
  */
-export async function checkSubscriptionStatus(userId: string): Promise<SubscriptionStatus> {
+export async function checkSubscriptionStatus(userId: string, userEmail?: string): Promise<SubscriptionStatus> {
   try {
-    const subscriptionRef = db.collection('subscriptions').doc(userId);
-    const subscriptionDoc = await subscriptionRef.get();
+    // Try multiple lookups to ensure we catch all subscription patterns
+    let subscriptionDoc = await db.collection('subscriptions').doc(userId).get();
+    let subscriptionRef = db.collection('subscriptions').doc(userId);
+    
+    // If no subscription by userId and we have email, check by email
+    if (!subscriptionDoc.exists && userEmail) {
+      console.log(`🔍 No subscription found by userId, checking by email: ${userEmail}`);
+      const emailDoc = await db.collection('subscriptions').doc(userEmail).get();
+      
+      if (emailDoc.exists) {
+        console.log(`✅ Found subscription by email, migrating to userId...`);
+        const emailData = emailDoc.data()!;
+        
+        // Migrate subscription to userId
+        await subscriptionRef.set({
+          ...emailData,
+          migratedFrom: userEmail,
+          updatedAt: Timestamp.now()
+        }, { merge: true });
+        
+        subscriptionDoc = await subscriptionRef.get();
+      }
+    }
 
     // Compute current UTC month period boundaries
     const now = new Date();

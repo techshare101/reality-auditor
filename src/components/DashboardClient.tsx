@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuditCache } from "@/lib/useAuditCache";
@@ -12,6 +12,8 @@ import SubscriptionCards from "@/components/SubscriptionCards";
 import RecentAuditsCard from "@/components/RecentAuditsCard";
 import BillingDebugPanel from "@/components/BillingDebugPanel";
 import InfoModal from "@/components/InfoModal";
+import { showToast, ToastProvider } from "@/components/GlowingToast";
+import ToastContainer from "@/components/ToastContainer";
 
 export default function DashboardClient() {
   const { user, logout } = useAuth();
@@ -19,6 +21,37 @@ export default function DashboardClient() {
   const { clearAudits } = useAuditCache();
   const searchParams = useSearchParams();
   const debugMode = searchParams?.get('debug') === '1';
+  const upgrade = searchParams?.get('upgrade');
+  const sessionId = searchParams?.get('session_id');
+
+  // Handle checkout redirect
+  useEffect(() => {
+    if (upgrade === 'success' && sessionId) {
+      // Verify the session and update Firestore
+      fetch(`/api/verify-session?session_id=${sessionId}`)
+        .then(() => {
+          showToast.success(
+            "🎉 Welcome to Reality Auditor Pro!",
+            "Unlimited audits unlocked. Your dashboard is updating..."
+          );
+          // Clean up URL params
+          router.replace('/dashboard');
+        })
+        .catch(() => {
+          showToast.error(
+            "Verification Failed",
+            "Please refresh the page or contact support."
+          );
+        });
+    } else if (upgrade === 'cancelled') {
+      showToast.info(
+        "Upgrade Cancelled",
+        "You're still on the Free Plan. Upgrade anytime!"
+      );
+      // Clean up URL params
+      router.replace('/dashboard');
+    }
+  }, [upgrade, sessionId, router]);
 
   const handleLogout = useCallback(async () => {
     try {
@@ -38,8 +71,12 @@ export default function DashboardClient() {
   if (!user) return null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black text-white">
-      {/* Dashboard Header */}
+    <ToastProvider>
+      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black text-white">
+        {/* Toast Container */}
+        <ToastContainer />
+        
+        {/* Dashboard Header */}
       <div className="px-4 md:px-8 py-6">
         <div className="max-w-7xl mx-auto">
           <div className="flex justify-between items-center mb-8">
@@ -138,10 +175,11 @@ export default function DashboardClient() {
         </div>
       </div>
       
-      {/* Reality Auditor Main App */}
-      <main>
-        <RealityAuditorApp />
-      </main>
-    </div>
+        {/* Reality Auditor Main App */}
+        <main>
+          <RealityAuditorApp />
+        </main>
+      </div>
+    </ToastProvider>
   );
 }

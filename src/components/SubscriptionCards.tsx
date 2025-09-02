@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/tooltip';
 import { useAuth } from '@/contexts/AuthContext';
 import { getUserUsage } from '@/lib/usage';
+import MissionBanner from '@/components/MissionBanner';
 
 interface SubscriptionData {
   planType: 'free' | 'basic' | 'pro' | 'enterprise';
@@ -496,36 +497,39 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
                 }`} />
               </div>
               <span className="bg-gradient-to-r from-white to-blue-100 bg-clip-text text-transparent">
-                Usage This Month
+                {subscriptionData.planType === 'free' ? 'Free Plan Includes' : 'Plan Benefits'}
               </span>
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div>
-                <div className="flex justify-between items-baseline mb-2">
-                  <span className="text-2xl font-bold text-white">
-                    {subscriptionData.auditsUsed}
-                  </span>
-                  <span className="text-white/70">
-                    of {subscriptionData.auditsLimit}
-                  </span>
+              {/* Dynamic Mission Banner */}
+              <MissionBanner 
+                planType={subscriptionData.planType}
+                isNearLimit={subscriptionData.isNearLimit}
+              />
+              
+              {/* Show plan features below the mission banner */}
+              {subscriptionData.planType === 'free' && (
+                <div className="mt-2">
+                  <ul className="list-disc list-inside text-sm text-gray-300 space-y-1">
+                    <li>5 free audits / month</li>
+                    <li>Basic bias detection</li>
+                    <li>Cache-accelerated results</li>
+                  </ul>
                 </div>
-                
-                <Progress 
-                  value={subscriptionData.usagePercentage} 
-                  className={`h-3 ${
-                    subscriptionData.isNearLimit 
-                      ? 'bg-amber-500/20' 
-                      : 'bg-white/10'
-                  }`}
-                />
-                
-                <div className="flex justify-between text-sm text-white/70 mt-2">
-                  <span>{subscriptionData.auditsRemaining} remaining</span>
-                  <span>{Math.round(subscriptionData.usagePercentage)}% used</span>
+              )}
+              
+              {subscriptionData.planType === 'pro' && (
+                <div className="mt-2">
+                  <ul className="list-disc list-inside text-sm text-emerald-300 space-y-1">
+                    <li>Unlimited audits</li>
+                    <li>Advanced bias analysis</li>
+                    <li>Priority processing</li>
+                    <li>Detailed fact-checking</li>
+                  </ul>
                 </div>
-              </div>
+              )}
 
               {subscriptionData.isNearLimit && (
                 <motion.div
@@ -554,7 +558,7 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
         </Card>
       </motion.div>
 
-      {/* Quick Upgrade Card */}
+      {/* Quick Upgrade Card for Free users */}
       {subscriptionData.planType === 'free' && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -582,7 +586,7 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
                   <div className="space-y-2 text-sm text-purple-100/90">
                     <div className="flex items-center gap-2">
                       <CheckCircle className="w-4 h-4 text-purple-400" />
-                      <span>100+ audits per month</span>
+                      <span>Unlimited audits</span>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -612,8 +616,63 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
                   className="w-full bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-600 hover:to-indigo-700 hover:scale-105 transition-all"
                 >
                   <ArrowUpRight className="w-4 h-4 mr-2" />
-                  Start Basic Plan - $19/mo
+                  Start Pro Plan – $19/mo
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </motion.div>
+      )}
+
+      {/* Thank You Card for Pro users */}
+      {subscriptionData.planType === 'pro' && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.6 }}
+        >
+          <Card className="bg-gradient-to-br from-green-500/20 via-emerald-600/15 to-teal-700/20 border-green-500/40 backdrop-blur-xl rounded-3xl shadow-2xl overflow-hidden group hover:shadow-green-500/20 transition-all duration-300">
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-3 text-xl">
+                <div className="p-2 rounded-xl bg-green-500/20 border border-green-500/30">
+                  <Sparkles className="w-5 h-5 text-green-400" />
+                </div>
+                <span className="bg-gradient-to-r from-green-200 to-emerald-200 bg-clip-text text-transparent">
+                  Thank You!
+                </span>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-green-200 text-sm mb-3">
+                    Thanks for being a Pro member!
+                  </p>
+                  
+                  <div className="space-y-2 text-sm text-green-100/90">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      <span>Unlimited audits active</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      <span>Advanced features unlocked</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      <span>Priority support included</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20">
+                  <p className="text-sm text-green-200">
+                    Need help? Contact us at{' '}
+                    <a href="mailto:support@realityauditor.com" className="underline hover:text-green-100">
+                      support@realityauditor.com
+                    </a>
+                  </p>
+                </div>
               </div>
             </CardContent>
           </Card>
