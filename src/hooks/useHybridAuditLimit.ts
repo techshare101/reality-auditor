@@ -37,16 +37,26 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
           const usage = data.usage || data.auditsUsed || 0;
           const planLimit = data.limit || data.auditsLimit || defaultLimit;
           const planType = data.plan || data.planType || 'free';
+          const status = data.status || 'free';
+          
+          // Check if user has Pro plan - both planType and status should indicate Pro
+          const isPro = (planType === 'pro' || planType === 'basic') && status === 'active';
           
           setCount(usage);
           setLimit(planLimit);
-          setHasPaidSubscription(planType !== 'free');
+          setHasPaidSubscription(isPro);
           setIsUsingLocalFallback(false);
           
           // Sync local storage with Firestore
           LocalUsageTracker.syncWithFirestore(user.uid, usage);
           
-          console.log(`🔄 Firestore audit count updated: ${usage}/${planLimit} (${planType} plan)`);
+          console.log(`🔄 Firestore subscription data:`, {
+            planType,
+            status,
+            isPro,
+            usage: `${usage}/${planLimit}`,
+            rawData: data
+          });
         } else {
           // No subscription document exists, keep using local storage
           console.log(`📝 No subscription document found, using local storage`);
