@@ -36,7 +36,7 @@ import { Progress } from "@/components/ui/progress";
 import { RealityAudit, AuditRequest } from "@/lib/schemas";
 import CollapsibleText from "@/components/CollapsibleText";
 import ArticleContentCard from "@/components/ArticleContentCard";
-import { useAuditCache } from "@/lib/useAuditCache";
+import { useRecentAudits } from "@/hooks/useRecentAudits";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHybridAuditLimit } from "@/hooks/useHybridAuditLimit";
 import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outlets";
@@ -271,8 +271,8 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
     }
   }
 
-  // Local cache of last 5 audits
-  const { addAudit } = useAuditCache();
+  // Local cache of recent audits
+  const { addAudit: addRecentAudit } = useRecentAudits();
 
   // Listen for restore events (from RecentAuditsCard)
   useEffect(() => {
@@ -390,11 +390,18 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
         console.log('📈 Incremented local usage counter');
       }
 
-      // Save to local cache (last 5)
+      // Save to localStorage recent audits
       try {
-        addAudit({ url: auditRequest.url || 'pasted-content', result });
+        addRecentAudit({
+          id: Date.now().toString(), // Generate a unique ID
+          url: auditRequest.url || url || undefined,
+          content: auditRequest.content,
+          result: result,
+          metadata: metadata
+        });
+        console.log('✅ Audit saved to recent audits');
       } catch (err) {
-        console.warn('Local cache add failed:', err);
+        console.warn('Failed to save to recent audits:', err);
       }
       
       // Trigger subscription data refresh

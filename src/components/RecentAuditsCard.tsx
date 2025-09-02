@@ -1,197 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, limit, onSnapshot, DocumentData } from 'firebase/firestore';
+import React, { useState } from 'react';
+import { useRecentAudits } from '@/hooks/useRecentAudits';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { History, ArrowRight, FileText, Clock } from 'lucide-react';
-
-interface Audit {
-  id: string;
-  url?: string;
-  content?: string;
-  createdAt: Date;
-  result?: {
-    truth_score?: number;
-    summary?: string;
-    trust_badge?: {
-      level: string;
-      emoji: string;
-    };
-    sources?: Array<{ outlet: string; url: string }>;
-  };
-  metadata?: {
-    title?: string;
-    outlet?: string;
-  };
-}
+import { History, ArrowRight, FileText, Clock, Trash2 } from 'lucide-react';
 
 const RecentAuditsCard = React.memo(function RecentAuditsCard() {
-  const { user } = useAuth();
-  const [audits, setAudits] = useState<Audit[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    if (!user) {
-      console.log('❌ No user logged in, skipping audit fetch');
-      setAudits([]);
-      setLoading(false);
-      return;
-    }
-
-    console.log('🔍 Setting up audit listener for user:', {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName
-    });
-    
-    // First, let's try to get ALL audits without any filters to debug
-    console.log('🚀 DEBUG: Attempting to fetch ALL audits first...');
-    const debugQuery = query(
-      collection(db, 'audits'),
-      limit(10)
-    );
-    
-    // Debug: Get all audits to see what's in the collection
-    onSnapshot(debugQuery, 
-      (debugSnapshot) => {
-        console.log('🎯 DEBUG - All audits in collection:', debugSnapshot.size);
-        debugSnapshot.forEach((doc) => {
-          const data = doc.data();
-          console.log('📄 DEBUG - Audit document:', {
-            id: doc.id,
-            userId: data.userId,
-            userEmail: data.userEmail,
-            uid: data.uid,
-            createdAt: data.createdAt,
-            url: data.url,
-            allFields: Object.keys(data)
-          });
-        });
-      },
-      (error) => {
-        console.error('❌ DEBUG - Error fetching all audits:', error);
-      }
-    );
-    
-    // Now try the user-specific query
-    console.log('🔍 Now trying user-specific query...');
-    
-    // Also try with user email in case that's how they're stored
-    console.log('🔍 Also trying query with user email:', user.email);
-    const emailQuery = query(
-      collection(db, 'audits'),
-      where('userEmail', '==', user.email),
-      limit(5)
-    );
-    
-    // Try email query to see if audits are stored by email
-    onSnapshot(emailQuery,
-      (emailSnapshot) => {
-        console.log('📧 Email query results:', emailSnapshot.size, 'documents');
-        if (emailSnapshot.size > 0) {
-          console.log('✅ Found audits by email! Processing...');
-          const auditData: Audit[] = [];
-          emailSnapshot.forEach((doc) => {
-            const data = doc.data();
-            auditData.push({
-              id: doc.id,
-              ...data,
-              createdAt: data.createdAt?.toDate() || new Date()
-            } as Audit);
-          });
-          // Sort manually in JavaScript
-          auditData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-          setAudits(auditData.slice(0, 5)); // Take top 5
-          setLoading(false);
-        }
-      },
-      (error) => {
-        console.error('❌ Email query error:', error);
-      }
-    );
-    
-    // First, try a simple query without ordering to see if we get any audits
-    const simpleQuery = query(
-      collection(db, 'audits'),
-      where('userId', '==', user.uid),
-      limit(5)
-    );
-    
-    // Try the simple query first to debug
-    console.log('🔍 Trying simple query first (no ordering)...');
-    
-    // Set up real-time listener for user's audits
-    const q = query(
-      collection(db, 'audits'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc'),
-      limit(5)
-    );
-
-    const unsubscribe = onSnapshot(q, 
-      (snapshot) => {
-        console.log('📊 Received audit snapshot:', snapshot.size, 'documents');
-        const auditData: Audit[] = [];
-        snapshot.forEach((doc) => {
-          const data = doc.data();
-          console.log('📄 Audit doc:', doc.id, data);
-          auditData.push({
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt?.toDate() || new Date()
-          } as Audit);
-        });
-        // Sort by createdAt manually if we get results
-        auditData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-        setAudits(auditData.slice(0, 5)); // Take top 5
-        setLoading(false);
-      },
-      (error) => {
-        console.error('❌ Error fetching audits with ordering:', error);
-        // Check if it's an index error
-        if (error.message?.includes('index') || error.message?.includes('requires an index')) {
-          console.error('🔥 Firestore index required, trying fallback query without ordering...');
-          
-          // Fallback: Try without ordering and sort manually
-          const fallbackUnsubscribe = onSnapshot(simpleQuery,
-            (snapshot) => {
-              console.log('📊 Fallback query succeeded! Got', snapshot.size, 'documents');
-              const auditData: Audit[] = [];
-              snapshot.forEach((doc) => {
-                const data = doc.data();
-                console.log('📄 Fallback audit doc:', doc.id, data);
-                auditData.push({
-                  id: doc.id,
-                  ...data,
-                  createdAt: data.createdAt?.toDate() || new Date()
-                } as Audit);
-              });
-              // Sort manually in JavaScript
-              auditData.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-              setAudits(auditData.slice(0, 5)); // Take top 5
-              setLoading(false);
-            },
-            (fallbackError) => {
-              console.error('❌ Fallback query also failed:', fallbackError);
-              setLoading(false);
-            }
-          );
-          
-          // Return the fallback unsubscribe function
-          return () => fallbackUnsubscribe();
-        } else {
-          // Some other error
-          console.error('❌ Non-index error:', error);
-          setLoading(false);
-        }
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user]);
+  const { audits, loading, clearAudits, removeAudit, maxAudits, isPro } = useRecentAudits();
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   if (loading) {
     return (
@@ -258,9 +75,19 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
               Recent Audits
             </h3>
           </div>
-          <span className="text-sm text-white/50">
-            Last 5 audits
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-white/50">
+              {audits.length} of {maxAudits} max
+            </span>
+            {audits.length > 0 && (
+              <button
+                onClick={() => setShowClearConfirm(true)}
+                className="text-xs px-2 py-1 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 transition-all duration-200"
+              >
+                Clear All
+              </button>
+            )}
+          </div>
         </div>
         
         <div className="space-y-3">
@@ -271,16 +98,16 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
             } catch { 
               host = 'Direct paste'; 
             }
-            const title = audit.metadata?.title || audit.result?.summary?.substring(0, 60) + '...' || 'Untitled Audit';
-            const outlet = audit.result?.sources?.[0]?.outlet || audit.metadata?.outlet || host;
+            const title = audit.title || audit.summary?.substring(0, 60) + '...' || 'Untitled Audit';
+            const outlet = audit.outlet || host;
             const created = new Date(audit.createdAt).toLocaleDateString('en-US', { 
               month: 'short', 
               day: 'numeric',
               hour: '2-digit',
               minute: '2-digit'
             });
-            const truthScore = audit.result?.truth_score || 0;
-            const badge = audit.result?.trust_badge;
+            const truthScore = audit.truthScore || 0;
+            const badge = audit.trustBadge;
             
             return (
               <motion.div
@@ -288,10 +115,11 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: index * 0.1 }}
+                className="relative group"
               >
                 <Link
                   href={`/pasted-content/${audit.id}`}
-                  className="block p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-indigo-500/30 transition-all duration-200 group"
+                  className="block p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-indigo-500/30 transition-all duration-200"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -325,6 +153,13 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
                     </div>
                   </div>
                 </Link>
+                <button
+                  onClick={() => removeAudit(audit.id)}
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 transition-all duration-200"
+                  title="Remove audit"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
               </motion.div>
             );
           })}
@@ -346,9 +181,35 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
           </Link>
         </motion.div>
       </div>
+      
+      {/* Clear Confirmation Modal */}
+      {showClearConfirm && (
+        <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="bg-gray-800 rounded-xl p-4 max-w-sm w-full border border-white/10">
+            <h4 className="text-white font-medium mb-2">Clear all audits?</h4>
+            <p className="text-white/60 text-sm mb-4">This will remove all {audits.length} audits from your history. This action cannot be undone.</p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  clearAudits();
+                  setShowClearConfirm(false);
+                }}
+                className="flex-1 px-3 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-red-300 hover:text-red-200 transition-all duration-200 text-sm font-medium"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={() => setShowClearConfirm(false)}
+                className="flex-1 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/70 hover:text-white transition-all duration-200 text-sm font-medium"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 });
 
 export default RecentAuditsCard;
-
