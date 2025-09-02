@@ -181,6 +181,12 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   const [showMetadata, setShowMetadata] = useState(false);
   const [showAllSources, setShowAllSources] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  
+  // Ensure client-side only rendering for user-dependent content
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   async function loadArticle() {
     if (!url.trim()) {
@@ -464,7 +470,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
         </motion.div>
 
         {/* Audit Count Display */}
-        {user && (
+        {mounted && user && (
           <motion.div
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
