@@ -1,4 +1,5 @@
 // Stripe webhook handler for Reality Auditor
+// Last updated: 2025-09-04T13:51:30Z
 import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import Stripe from "stripe";
