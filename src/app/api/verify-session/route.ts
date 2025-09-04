@@ -4,12 +4,13 @@ import { db } from "@/lib/firebase-admin";
 import { getStripe } from "@/lib/stripeClient";
 import { Timestamp } from "firebase-admin/firestore";
 
+export const dynamic = 'force-dynamic';
+
 const stripe = getStripe();
 
 export async function GET(req: NextRequest) {
   try {
-    const { searchParams } = new URL(req.url);
-    const sessionId = searchParams.get("session_id");
+    const sessionId = req.nextUrl.searchParams.get("session_id");
 
     if (!sessionId) {
       return NextResponse.json({ error: "Missing session_id" }, { status: 400 });

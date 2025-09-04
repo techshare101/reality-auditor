@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import dynamic from 'next/dynamic';
+
+export const dynamic = 'force-dynamic';
 import { auth } from "@/lib/firebase";
 import { 
   createUserWithEmailAndPassword, 
@@ -226,11 +229,11 @@ export default function AuthDebugPage() {
             <p className="text-yellow-400">Expected OAuth Handler:</p>
             <p className="text-xs break-all">{`https://${config.authDomain}/__/auth/handler`}</p>
             <p className="text-yellow-400 mt-3">Current Test URL:</p>
-            <p className="text-xs break-all">{window.location.href}</p>
+            <p className="text-xs break-all">{typeof window !== 'undefined' ? window.location.href : 'Loading...'}</p>
             <div className="mt-4 p-3 bg-black/30 rounded-lg">
               <p className="text-green-400 mb-2">Quick Fix Steps:</p>
               <ol className="text-xs space-y-1 text-gray-300">
-                <li>1. Add <code className="text-blue-400">{window.location.hostname}</code> to Firebase authorized domains</li>
+                <li>1. Add <code className="text-blue-400">{typeof window !== 'undefined' ? window.location.hostname : 'hostname'}</code> to Firebase authorized domains</li>
                 <li>2. Add redirect URI to Google Cloud Console</li>
                 <li>3. Copy Client ID from Google to Firebase</li>
                 <li>4. Clear browser cache and retry</li>
