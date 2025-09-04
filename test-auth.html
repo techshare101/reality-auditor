@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Firebase Auth Test</title>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+</head>
+<body>
+    <h1>Firebase Auth Test</h1>
+    <div id="status">Loading...</div>
+    <button id="testAuth" style="display:none;">Test Google Sign In</button>
+    
+    <script>
+        // Your Firebase config
+        const firebaseConfig = {
+            apiKey: "AIzaSyD6-6nBoYnLTUtvrb_EYKRi2V04DMrAahQ",
+            authDomain: "reality-auditor.firebaseapp.com",
+            projectId: "reality-auditor",
+            storageBucket: "reality-auditor.firebasestorage.app",
+            messagingSenderId: "381041390839",
+            appId: "1:381041390839:web:74c0b342015aaddb0c0ff2",
+            measurementId: "G-SM0RCDSEKW"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        
+        document.getElementById('status').textContent = 'Firebase initialized. Current domain: ' + window.location.hostname;
+        document.getElementById('testAuth').style.display = 'block';
+        
+        document.getElementById('testAuth').addEventListener('click', async () => {
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await auth.signInWithPopup(provider);
+                document.getElementById('status').textContent = 'Success! Signed in as: ' + result.user.email;
+            } catch (error) {
+                document.getElementById('status').textContent = 'Error: ' + error.code + ' - ' + error.message;
+                console.error('Full error:', error);
+            }
+        });
+    </script>
+</body>
+</html>

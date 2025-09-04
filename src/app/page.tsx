@@ -42,7 +42,7 @@ export default function LandingPage() {
                 Login
               </Link>
               <Link
-                href="/register"
+                href="/signup"
                 className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-semibold hover:scale-105 transition-transform"
               >
                 Sign Up Free
@@ -93,7 +93,7 @@ export default function LandingPage() {
 
           <div className="mt-10 flex flex-col sm:flex-row justify-center gap-4">
             <Link
-              href="/register"
+              href="/signup"
               className="px-8 py-4 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold shadow-lg hover:scale-105 transition inline-flex items-center justify-center gap-2"
             >
               <Sparkles className="w-5 h-5" />
@@ -258,7 +258,7 @@ export default function LandingPage() {
             Join journalists, researchers, and everyday readers using Reality Auditor to cut through media bias and manipulation.
           </p>
           <Link
-            href="/register"
+            href="/signup"
             className="mt-10 inline-flex items-center gap-3 px-10 py-5 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-600 text-white font-bold shadow-lg hover:scale-105 transition text-lg"
           >
             <Sparkles className="w-6 h-6" />
