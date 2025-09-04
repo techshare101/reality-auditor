@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
     console.log(`🔄 Reactivating subscription ${subscriptionId} for user ${userId}`);
 
     // Fetch the subscription to verify ownership
-    const subscription: Stripe.Subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId) as any;
     
     // Verify the subscription belongs to the user
     if (subscription.metadata?.firebase_uid && subscription.metadata.firebase_uid !== userId) {
@@ -63,14 +63,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Reactivate the subscription
-    const updated: Stripe.Subscription = await stripe.subscriptions.update(subscriptionId, {
+    const updated = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: false,
       metadata: {
         ...subscription.metadata,
         reactivated_by: userId,
         reactivated_at: new Date().toISOString(),
       }
-    });
+    }) as any;
 
     console.log(`✅ Subscription ${subscriptionId} reactivated successfully`);
 

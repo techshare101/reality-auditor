@@ -55,13 +55,13 @@ export async function POST(req: NextRequest) {
     }
 
     // Mark subscription to cancel at end of billing period
-    const updated: Stripe.Subscription = await stripe.subscriptions.update(subscriptionId, {
+    const updated = await stripe.subscriptions.update(subscriptionId, {
       cancel_at_period_end: true,
       metadata: {
         cancelled_by: userId,
         cancelled_at: new Date().toISOString(),
       }
-    });
+    }) as any; // Type assertion to handle Stripe response
 
     console.log(`✅ Subscription ${subscriptionId} marked for cancellation at period end`);
 
