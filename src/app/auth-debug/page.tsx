@@ -11,13 +11,20 @@ import {
 } from "firebase/auth";
 import { Eye } from "lucide-react";
 
+interface TestResults {
+  emailCreate?: string;
+  emailSignIn?: string;
+  google?: string;
+  providers?: string;
+}
+
 export default function AuthDebugPage() {
-  const [config, setConfig] = useState<any>({});
+  const [config, setConfig] = useState<Record<string, string>>({});
   const [authState, setAuthState] = useState<string>("checking...");
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [testEmail] = useState(`test${Date.now()}@test.com`);
   const [testPassword] = useState("testPassword123!");
-  const [results, setResults] = useState<any>({});
+  const [results, setResults] = useState<TestResults>({});
 
   useEffect(() => {
     // Check Firebase config
@@ -41,24 +48,24 @@ export default function AuthDebugPage() {
 
   const testEmailAuth = async () => {
     try {
-      setResults(prev => ({ ...prev, emailCreate: "🔄 Testing..." }));
+      setResults((prev: TestResults) => ({ ...prev, emailCreate: "🔄 Testing..." }));
       
       // Try to create a test user
       const userCred = await createUserWithEmailAndPassword(auth, testEmail, testPassword);
-      setResults(prev => ({ ...prev, emailCreate: "✅ Email/Password auth works!" }));
+      setResults((prev: TestResults) => ({ ...prev, emailCreate: "✅ Email/Password auth works!" }));
       
       // Sign out
       await auth.signOut();
       
       // Try to sign in
-      setResults(prev => ({ ...prev, emailSignIn: "🔄 Testing sign in..." }));
+      setResults((prev: TestResults) => ({ ...prev, emailSignIn: "🔄 Testing sign in..." }));
       await signInWithEmailAndPassword(auth, testEmail, testPassword);
-      setResults(prev => ({ ...prev, emailSignIn: "✅ Sign in works!" }));
+      setResults((prev: TestResults) => ({ ...prev, emailSignIn: "✅ Sign in works!" }));
       
       // Clean up
       await auth.signOut();
     } catch (error: any) {
-      setResults(prev => ({ 
+      setResults((prev: TestResults) => ({
         ...prev, 
         emailCreate: `❌ ${error.code}: ${error.message}`,
         emailSignIn: error.code === "auth/email-already-in-use" ? "⚠️ User exists" : `❌ ${error.code}`
@@ -68,7 +75,7 @@ export default function AuthDebugPage() {
 
   const testGoogleAuth = async () => {
     try {
-      setResults(prev => ({ ...prev, google: "🔄 Testing Google..." }));
+      setResults((prev: TestResults) => ({ ...prev, google: "🔄 Testing Google..." }));
       
       const provider = new GoogleAuthProvider();
       provider.addScope('email');
@@ -80,13 +87,13 @@ export default function AuthDebugPage() {
       console.log("Current domain:", window.location.hostname);
       
       const result = await signInWithPopup(auth, provider);
-      setResults(prev => ({ ...prev, google: `✅ Google auth works! User: ${result.user.email}` }));
+      setResults((prev: TestResults) => ({ ...prev, google: `✅ Google auth works! User: ${result.user.email}` }));
       
       // Sign out after test
       await auth.signOut();
     } catch (error: any) {
       console.error("Google auth error:", error);
-      setResults(prev => ({ 
+      setResults((prev: TestResults) => ({
         ...prev, 
         google: `❌ ${error.code}: ${error.message}`
       }));
@@ -108,9 +115,9 @@ export default function AuthDebugPage() {
       console.log("Auth instance:", auth);
       console.log("Auth app:", auth.app);
       console.log("Auth settings:", auth.settings);
-      setResults(prev => ({ ...prev, providers: "✅ Check console for provider details" }));
+      setResults((prev: TestResults) => ({ ...prev, providers: "✅ Check console for provider details" }));
     } catch (error: any) {
-      setResults(prev => ({ ...prev, providers: `❌ ${error.message}` }));
+      setResults((prev: TestResults) => ({ ...prev, providers: `❌ ${error.message}` }));
     }
   };
 
