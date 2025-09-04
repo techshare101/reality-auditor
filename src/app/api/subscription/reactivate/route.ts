@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
-import { auth } from "@/lib/firebase-admin";
-import { adminDb } from "@/lib/firebase-admin";
+import { auth, db } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -77,7 +76,7 @@ export async function POST(req: NextRequest) {
 
     // Update Firestore to keep UI in sync
     try {
-      const userSubscriptionRef = adminDb.collection('user_subscription_status').doc(userId);
+      const userSubscriptionRef = db.collection('user_subscription_status').doc(userId);
       await userSubscriptionRef.update({
         'subscription.cancel_at_period_end': false,
         'subscription.status': updated.status,
