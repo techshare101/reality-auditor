@@ -38,7 +38,7 @@ export async function POST(req: Request) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const customerId = session.customer as string;
-        const userEmail = session.customer_email;
+        const userEmail = session.customerEmail;
         const userId = session.metadata?.userId;
 
         console.log("✅ Checkout completed for:", userEmail);
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
                   plan: session.metadata?.plan || "pro",
                   status: "active",
                   stripeSessionId: session.id,
-                  amount: session.amount_total ? session.amount_total / 100 : 0,
+                  amount: session.amountTotal ? session.amountTotal / 100 : 0,
                   currency: session.currency,
                 },
                 email: userEmail,
@@ -104,8 +104,8 @@ export async function POST(req: Request) {
               subscription: {
                 plan: subscription.items.data[0].price.nickname || "pro",
                 status: subscription.status,
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                currentPeriodEnd: new Date(subscription.currentPeriodEnd * 1000),
+                cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
               },
               updatedAt: FieldValue.serverTimestamp(),
             },
@@ -120,9 +120,9 @@ export async function POST(req: Request) {
               {
                 plan: subscription.items.data[0].price.nickname || "pro",
                 status: subscription.status,
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                currentPeriodEnd: new Date(subscription.currentPeriodEnd * 1000),
+                currentPeriodStart: new Date(subscription.currentPeriodStart * 1000),
+                cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
                 updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true }
