@@ -4,7 +4,8 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { AlertCircle, CheckCircle, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { 
-  cancelSubscription, 
+  cancelSubscription,
+  reactivateSubscription, 
   formatCancellationDate, 
   getSubscriptionStatusDisplay 
 } from "@/lib/subscription-management";
@@ -25,6 +26,7 @@ export default function SubscriptionManager({
     error?: string;
   } | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
 
   const handleCancel = async () => {
     setCancelling(true);
@@ -53,6 +55,32 @@ export default function SubscriptionManager({
     }
   };
 
+  const handleReactivate = async () => {
+    setReactivating(true);
+    setCancelResult(null);
+
+    try {
+      const result = await reactivateSubscription(subscription.id);
+      
+      setCancelResult({
+        success: true,
+        message: result.message || "Subscription reactivated successfully",
+      });
+      
+      // Refresh the parent component
+      if (onUpdate) {
+        setTimeout(onUpdate, 2000);
+      }
+    } catch (error: any) {
+      setCancelResult({
+        success: false,
+        error: error.message || "Failed to reactivate subscription",
+      });
+    } finally {
+      setReactivating(false);
+    }
+  };
+
   const handleRetry = () => {
     setCancelResult(null);
     handleCancel();
@@ -73,14 +101,33 @@ export default function SubscriptionManager({
           </div>
         </div>
         
-        {subscription && subscription.status === 'active' && !subscription.cancel_at_period_end && (
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
-          >
-            Cancel Subscription
-          </button>
-        )}
+        <div className="flex gap-2">
+          {subscription && subscription.status === 'active' && !subscription.cancel_at_period_end && (
+            <button
+              onClick={() => setShowConfirm(true)}
+              className="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded-lg transition-colors"
+            >
+              Cancel Subscription
+            </button>
+          )}
+          
+          {subscription && subscription.cancel_at_period_end && (
+            <button
+              onClick={handleReactivate}
+              disabled={reactivating}
+              className="px-4 py-2 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {reactivating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Reactivating...
+                </>
+              ) : (
+                "🔄 Reactivate Subscription"
+              )}
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Subscription details */}

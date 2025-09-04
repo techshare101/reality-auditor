@@ -42,40 +42,49 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    console.log(`🚫 Cancelling subscription ${subscriptionId} for user ${userId}`);
+    console.log(`🔄 Reactivating subscription ${subscriptionId} for user ${userId}`);
 
     // Fetch the subscription to verify ownership
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription: Stripe.Subscription = await stripe.subscriptions.retrieve(subscriptionId);
     
-    // Verify the subscription belongs to the user (via metadata or customer lookup)
+    // Verify the subscription belongs to the user
     if (subscription.metadata?.firebase_uid && subscription.metadata.firebase_uid !== userId) {
       return NextResponse.json(
-        { error: "Unauthorized to cancel this subscription" },
+        { error: "Unauthorized to reactivate this subscription" },
         { status: 403 }
       );
     }
 
-    // Mark subscription to cancel at end of billing period
+    // Check if subscription is currently set to cancel
+    if (!subscription.cancel_at_period_end) {
+      return NextResponse.json(
+        { error: "Subscription is already active" },
+        { status: 400 }
+      );
+    }
+
+    // Reactivate the subscription
     const updated: Stripe.Subscription = await stripe.subscriptions.update(subscriptionId, {
-      cancel_at_period_end: true,
+      cancel_at_period_end: false,
       metadata: {
-        cancelled_by: userId,
-        cancelled_at: new Date().toISOString(),
+        ...subscription.metadata,
+        reactivated_by: userId,
+        reactivated_at: new Date().toISOString(),
       }
     });
 
-    console.log(`✅ Subscription ${subscriptionId} marked for cancellation at period end`);
+    console.log(`✅ Subscription ${subscriptionId} reactivated successfully`);
 
     // Update Firestore to keep UI in sync
     try {
       const userSubscriptionRef = adminDb.collection('user_subscription_status').doc(userId);
       await userSubscriptionRef.update({
-        'subscription.cancel_at_period_end': true,
-        'subscription.current_period_end': updated.current_period_end,
+        'subscription.cancel_at_period_end': false,
         'subscription.status': updated.status,
-        'subscription.canceled_at': updated.canceled_at || null,
+        'subscription.canceled_at': null,
         'updated_at': FieldValue.serverTimestamp(),
-        'cancel_requested_at': FieldValue.serverTimestamp(),
+        'reactivated_at': FieldValue.serverTimestamp(),
+        'cancel_requested_at': null,
       });
       console.log(`📝 Updated Firestore subscription status for user ${userId}`);
     } catch (firestoreError) {
@@ -89,14 +98,13 @@ export async function POST(req: NextRequest) {
         id: updated.id,
         cancel_at_period_end: updated.cancel_at_period_end,
         current_period_end: updated.current_period_end,
-        canceled_at: updated.canceled_at || null,
+        status: updated.status,
       },
-      message: `Subscription will be cancelled at the end of the current billing period (${new Date(updated.current_period_end * 1000).toLocaleDateString()})`,
+      message: "Your subscription has been reactivated successfully!",
     });
   } catch (err: any) {
-    console.error("❌ Cancel subscription error:", err);
+    console.error("❌ Reactivate subscription error:", err);
     
-    // Provide specific error messages for common Stripe errors
     if (err.type === 'StripeInvalidRequestError') {
       return NextResponse.json(
         { 
@@ -119,20 +127,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (err.type === 'StripeConnectionError') {
-      return NextResponse.json(
-        { 
-          error: "Network error. Please check your connection and try again.", 
-          code: "connection_error",
-          retryable: true 
-        },
-        { status: 503 }
-      );
-    }
-
     return NextResponse.json(
       { 
-        error: "Failed to cancel subscription", 
+        error: "Failed to reactivate subscription", 
         code: "unknown_error",
         retryable: true,
         details: err.message 

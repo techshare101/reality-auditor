@@ -14,6 +14,56 @@ interface CancelSubscriptionResponse {
   retryable?: boolean;
 }
 
+export async function reactivateSubscription(
+  subscriptionId: string,
+  retryCount = 0
+): Promise<CancelSubscriptionResponse> {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      throw new Error("User not authenticated");
+    }
+
+    const idToken = await user.getIdToken();
+
+    const response = await fetch("/api/subscription/reactivate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({ subscriptionId }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      // If retryable and we haven't exceeded retry limit, retry
+      if (data.retryable && retryCount < 3) {
+        console.log(`⏳ Retrying reactivate request (attempt ${retryCount + 1})...`);
+        // Exponential backoff: 1s, 2s, 4s
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        return reactivateSubscription(subscriptionId, retryCount + 1);
+      }
+      
+      throw new Error(data.error || "Failed to reactivate subscription");
+    }
+
+    return data;
+  } catch (error: any) {
+    console.error("Reactivate subscription error:", error);
+    
+    // Network errors are retryable
+    if (error.message.includes("fetch") && retryCount < 3) {
+      console.log(`⏳ Network error, retrying (attempt ${retryCount + 1})...`);
+      await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+      return reactivateSubscription(subscriptionId, retryCount + 1);
+    }
+    
+    throw error;
+  }
+}
+
 export async function cancelSubscription(
   subscriptionId: string,
   retryCount = 0
