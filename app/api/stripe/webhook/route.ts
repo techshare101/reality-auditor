@@ -102,8 +102,8 @@ export async function POST(req: Request) {
               subscription: {
                 plan: subscription.items.data[0].price.nickname || "pro",
                 status: subscription.status,
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                currentPeriodEnd: new Date(subscription.currentPeriodEnd * 1000),
+                cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
               },
               updatedAt: FieldValue.serverTimestamp(),
             },
@@ -118,9 +118,9 @@ export async function POST(req: Request) {
               {
                 plan: subscription.items.data[0].price.nickname || "pro",
                 status: subscription.status,
-                currentPeriodEnd: new Date(subscription.current_period_end * 1000),
-                currentPeriodStart: new Date(subscription.current_period_start * 1000),
-                cancelAtPeriodEnd: subscription.cancel_at_period_end,
+                currentPeriodEnd: new Date(subscription.currentPeriodEnd * 1000),
+                currentPeriodStart: new Date(subscription.currentPeriodStart * 1000),
+                cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
                 updatedAt: FieldValue.serverTimestamp(),
               },
               { merge: true }
