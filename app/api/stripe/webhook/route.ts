@@ -10,6 +10,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
+// GET method for debugging - remove in production
+export async function GET() {
+  return NextResponse.json({
+    message: "Stripe webhook endpoint is active",
+    method: "Use POST to send webhook events",
+    timestamp: new Date().toISOString()
+  });
+}
+
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = headers().get("stripe-signature");
