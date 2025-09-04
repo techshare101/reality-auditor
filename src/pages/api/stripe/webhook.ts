@@ -1,45 +1,44 @@
-// Stripe webhook handler for Reality Auditor
-// Last updated: 2025-09-04T13:51:30Z
-import { headers } from "next/headers";
-import { NextResponse } from "next/server";
+import { NextApiRequest, NextApiResponse } from "next";
+import { buffer } from "micro";
 import Stripe from "stripe";
 import { db as adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+// Disable body parsing, we need raw body for Stripe
+export const config = {
+  api: {
+    bodyParser: false,
+  },
+};
 
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
-// GET method for debugging - remove in production
-export async function GET() {
-  return NextResponse.json({
-    message: "Stripe webhook endpoint is active",
-    method: "Use POST to send webhook events",
-    timestamp: new Date().toISOString()
-  });
-}
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse
+) {
+  if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
+    return res.status(405).json({ error: "Method not allowed" });
+  }
 
-export async function POST(req: Request) {
-  const body = await req.text();
-  const signature = headers().get("stripe-signature");
+  const buf = await buffer(req);
+  const sig = req.headers["stripe-signature"];
 
-  if (!signature) {
-    return NextResponse.json(
-      { error: "No signature provided" },
-      { status: 400 }
-    );
+  if (!sig) {
+    return res.status(400).json({ error: "No signature provided" });
   }
 
   let event: Stripe.Event;
 
   try {
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    event = stripe.webhooks.constructEvent(buf, sig, webhookSecret);
   } catch (err) {
     console.error("❌ Webhook signature verification failed:", err);
-    return NextResponse.json(
-      { error: `Webhook Error: ${err instanceof Error ? err.message : "Unknown error"}` },
-      { status: 400 }
-    );
+    return res.status(400).json({
+      error: `Webhook Error: ${err instanceof Error ? err.message : "Unknown error"}`
+    });
   }
 
   try {
@@ -188,7 +187,6 @@ export async function POST(req: Request) {
       case "invoice.payment_succeeded": {
         const invoice = event.data.object as Stripe.Invoice;
         console.log("💰 Payment succeeded for invoice:", invoice.id);
-        // You can add invoice tracking here if needed
         break;
       }
 
@@ -227,12 +225,9 @@ export async function POST(req: Request) {
         console.log(`⚠️ Unhandled event type: ${event.type}`);
     }
 
-    return NextResponse.json({ received: true }, { status: 200 });
+    return res.status(200).json({ received: true });
   } catch (err) {
     console.error("🔥 Error handling Stripe webhook:", err);
-    return NextResponse.json(
-      { error: "Webhook handler failed" },
-      { status: 500 }
-    );
+    return res.status(500).json({ error: "Webhook handler failed" });
   }
 }
