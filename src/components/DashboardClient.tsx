@@ -15,6 +15,7 @@ import InfoModal from "@/components/InfoModal";
 import { showToast, ToastProvider } from "@/components/GlowingToast";
 import ToastContainer from "@/components/ToastContainer";
 import Image from "next/image";
+import { useSubscriptionSync } from "@/hooks/useSubscriptionSync";
 
 export default function DashboardClient() {
   const { user, logout } = useAuth();
@@ -24,6 +25,9 @@ export default function DashboardClient() {
   const debugMode = searchParams?.get('debug') === '1';
   const upgrade = searchParams?.get('upgrade');
   const sessionId = searchParams?.get('session_id');
+  
+  // Sync subscription status on login
+  useSubscriptionSync();
 
   // Handle checkout redirect
   useEffect(() => {
