@@ -75,7 +75,11 @@ const ParticlesBackground = () => {
   );
 };
 
+import { redirect } from 'next/navigation';
+
 export default function RegisterPage() {
+  // Redirect to signup page to avoid duplication
+  redirect('/signup');
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

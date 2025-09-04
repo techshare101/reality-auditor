@@ -110,7 +110,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
-    await signInWithPopup(auth, provider);
+    const result = await signInWithPopup(auth, provider);
+    
+    // Ensure usage record exists for Google sign-in users
+    if (result.user) {
+      const usageRef = doc(db, 'usage', result.user.uid);
+      try {
+        const usageSnap = await getDoc(usageRef);
+        
+        if (!usageSnap.exists()) {
+          await setDoc(usageRef, {
+            audits_used: 0,
+            audit_limit: 5,
+            plan: 'free',
+            created_at: new Date().toISOString(),
+            last_reset: new Date().toISOString()
+          });
+          console.log('✅ Created usage record for Google user:', result.user.uid);
+        }
+      } catch (error) {
+        console.error('Failed to create usage record:', error);
+      }
+    }
+    
+    return result;
   };
 
   const logout = async () => {
