@@ -81,10 +81,20 @@ export default function AuthDebugPage() {
       provider.addScope('email');
       provider.addScope('profile');
       
-      // Log provider details
-      console.log("Google Provider initialized:", provider);
-      console.log("Auth instance:", auth);
-      console.log("Current domain:", window.location.hostname);
+      // Log comprehensive debug info
+      console.group('🔍 Google OAuth Debug Info');
+      console.log("Provider:", provider);
+      console.log("Auth Domain:", auth.app.options.authDomain);
+      console.log("Current Domain:", window.location.hostname);
+      console.log("Current Protocol:", window.location.protocol);
+      console.log("OAuth Handler URL:", `${window.location.protocol}//${auth.app.options.authDomain}/__/auth/handler`);
+      console.log("Firebase Config:", {
+        apiKey: auth.app.options.apiKey ? '✅ Set' : '❌ Missing',
+        authDomain: auth.app.options.authDomain,
+        projectId: auth.app.options.projectId,
+        appId: auth.app.options.appId ? '✅ Set' : '❌ Missing'
+      });
+      console.groupEnd();
       
       const result = await signInWithPopup(auth, provider);
       setResults((prev: TestResults) => ({ ...prev, google: `✅ Google auth works! User: ${result.user.email}` }));
@@ -92,19 +102,40 @@ export default function AuthDebugPage() {
       // Sign out after test
       await auth.signOut();
     } catch (error: any) {
-      console.error("Google auth error:", error);
-      setResults((prev: TestResults) => ({
+      console.error("🚫 Google auth error:", error);
+      setResults((prev: TestResults) => ({ 
         ...prev, 
         google: `❌ ${error.code}: ${error.message}`
       }));
       
-      // Additional debugging for specific errors
+      // Detailed debugging for invalid-credential
       if (error.code === 'auth/invalid-credential') {
-        console.log("Invalid credential details:", {
+        console.group('🔴 Invalid Credential Debug');
+        console.error('This means Firebase rejected the Google credential.');
+        console.log('Common causes:');
+        console.log('1. Domain not in Firebase authorized domains');
+        console.log('2. Google Client ID mismatch in Firebase Console');
+        console.log('3. Wrong redirect URI in Google Cloud Console');
+        console.log('Current setup:', {
           authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
           currentDomain: window.location.hostname,
-          error: error
+          expectedHandler: `${window.location.protocol}//${process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN}/__/auth/handler`
         });
+        console.groupEnd();
+        
+        setResults((prev: TestResults) => ({ 
+          ...prev, 
+          google: `❌ ${error.code}: Check console for debugging steps`
+        }));
+      }
+      
+      // Handle other specific errors
+      if (error.code === 'auth/unauthorized-domain') {
+        console.error('🔴 Add this domain to Firebase:', window.location.hostname);
+      }
+      
+      if (error.code === 'auth/operation-not-allowed') {
+        console.error('🔴 Enable Google provider in Firebase Console');
       }
     }
   };
@@ -188,11 +219,32 @@ export default function AuthDebugPage() {
           </div>
         </div>
 
+        {/* OAuth Configuration Info */}
+        <div className="bg-white/10 backdrop-blur-xl rounded-2xl p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4">OAuth Configuration Info</h2>
+          <div className="space-y-2 font-mono text-sm">
+            <p className="text-yellow-400">Expected OAuth Handler:</p>
+            <p className="text-xs break-all">{`https://${config.authDomain}/__/auth/handler`}</p>
+            <p className="text-yellow-400 mt-3">Current Test URL:</p>
+            <p className="text-xs break-all">{window.location.href}</p>
+            <div className="mt-4 p-3 bg-black/30 rounded-lg">
+              <p className="text-green-400 mb-2">Quick Fix Steps:</p>
+              <ol className="text-xs space-y-1 text-gray-300">
+                <li>1. Add <code className="text-blue-400">{window.location.hostname}</code> to Firebase authorized domains</li>
+                <li>2. Add redirect URI to Google Cloud Console</li>
+                <li>3. Copy Client ID from Google to Firebase</li>
+                <li>4. Clear browser cache and retry</li>
+              </ol>
+            </div>
+          </div>
+        </div>
+
         {/* Instructions */}
         <div className="mt-6 text-sm text-gray-400">
           <p>💡 This page helps diagnose authentication issues.</p>
           <p>📋 Check the browser console for detailed error logs.</p>
           <p>🔐 Make sure to test on both localhost and production domains.</p>
+          <p>📝 See <a href="/docs/google-oauth-checklist.md" className="text-purple-400 hover:text-purple-300">OAuth Checklist</a> for detailed setup.</p>
         </div>
       </div>
     </div>
