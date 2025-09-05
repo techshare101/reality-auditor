@@ -2,6 +2,7 @@ import { z } from "zod";
 
 // Core Reality Audit Schema
 export const RealityAuditSchema = z.object({
+  id: z.string().optional().describe("Firestore document ID for the audit"),
   truth_score: z.number().min(0).max(10).describe("Truth score from 0-10 based on factual accuracy and evidence quality"),
   bias_patterns: z.array(z.string()).describe("Identified bias patterns like loaded language, cherry-picking, etc."),
   missing_angles: z.array(z.string()).describe("Important perspectives, context, or evidence not covered"),
@@ -19,7 +20,17 @@ export const RealityAuditSchema = z.object({
   })).describe("Individual fact-check results for specific claims").optional(),
   cache_status: z.enum(["hit", "miss"]).describe("Whether result came from cache or was freshly generated").optional(),
   cache_source: z.enum(["redis", "memory", "none"]).describe("Which cache layer served the result").optional(),
-  processing_time: z.number().describe("Time taken to process the request in milliseconds").optional()
+  processing_time: z.number().describe("Time taken to process the request in milliseconds").optional(),
+  // Additional fields returned by the API
+  trust_badge: z.object({
+    level: z.string(),
+    emoji: z.string(),
+    label: z.string()
+  }).optional().describe("Trust level badge for UI display"),
+  usage: z.object({
+    auditsUsed: z.number(),
+    auditsRemaining: z.number()
+  }).optional().describe("Usage information for the current user")
 });
 
 // Input schema for the audit request
