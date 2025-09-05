@@ -398,16 +398,26 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
       }
 
       // Save to localStorage recent audits (skip in demo mode)
-      if (!demoMode) {
+      if (!demoMode && result) {
         try {
-          addRecentAudit({
-            id: Date.now().toString(), // Generate a unique ID
+          await addRecentAudit({
+            // Use Firestore ID if available, otherwise generate one
+            id: result.id || `audit_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             url: auditRequest.url || url || undefined,
             content: auditRequest.content,
-            result: result,
+            result: {
+              truth_score: result.truth_score,
+              summary: result.summary,
+              trust_badge: result.trust_badge,
+              bias_patterns: result.bias_patterns,
+              missing_angles: result.missing_angles,
+              warnings: result.warnings,
+              citations: result.citations,
+              sources: result.sources,
+            },
             metadata: metadata
           });
-          console.log('✅ Audit saved to recent audits');
+          console.log('✅ Audit saved to recent audits with ID:', result.id || 'generated');
         } catch (err) {
           console.warn('Failed to save to recent audits:', err);
         }

@@ -4,10 +4,10 @@ import React, { useState } from 'react';
 import { useRecentAudits } from '@/hooks/useRecentAudits';
 import Link from 'next/link';
 import { motion } from 'framer-motion';
-import { History, ArrowRight, FileText, Clock, Trash2 } from 'lucide-react';
+import { History, ArrowRight, FileText, Clock, Trash2, RefreshCw, Cloud } from 'lucide-react';
 
 const RecentAuditsCard = React.memo(function RecentAuditsCard() {
-  const { audits, loading, clearAudits, removeAudit, maxAudits, isPro } = useRecentAudits();
+  const { audits, loading, syncing, clearAudits, removeAudit, maxAudits, isPro, refresh } = useRecentAudits();
   const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   if (loading) {
@@ -76,6 +76,12 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
             </h3>
           </div>
           <div className="flex items-center gap-2">
+            {syncing && (
+              <div className="flex items-center gap-1 text-xs text-blue-400">
+                <Cloud className="w-3 h-3 animate-pulse" />
+                <span>Syncing...</span>
+              </div>
+            )}
             <span className="text-sm text-white/50">
               {audits.length} of {maxAudits} max
             </span>
@@ -87,6 +93,13 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
                 Clear All
               </button>
             )}
+            <button
+              onClick={() => refresh && refresh()}
+              className="text-xs p-1 rounded-lg hover:bg-white/10 text-white/40 hover:text-white/60 transition-all duration-200"
+              title="Refresh from cloud"
+            >
+              <RefreshCw className="w-3 h-3" />
+            </button>
           </div>
         </div>
         

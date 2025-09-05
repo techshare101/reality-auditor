@@ -1,0 +1,150 @@
+// Add this to your existing webhook handler to write to user_subscription_status collection
+
+import { FieldValue } from 'firebase-admin/firestore';
+
+// Updated handler for checkout.session.completed
+async function handleCheckoutSessionCompleted(session: any) {
+  try {
+    const userId = session.metadata?.userId || session.metadata?.firebaseUid;
+    const customerId = session.customer as string;
+    
+    if (!userId) {
+      console.warn('⚠️ No userId found in session metadata');
+      return;
+    }
+
+    // Write to user_subscription_status collection
+    await db.collection('user_subscription_status').doc(userId).set({
+      plan: 'pro',
+      status: 'active',
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: session.subscription as string,
+      email: session.customer_details?.email || session.customer_email,
+      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    console.log(`✅ User ${userId} upgraded to Pro plan in user_subscription_status`);
+
+    // Also update the legacy collections for compatibility
+    await db.collection('subscriptions').doc(userId).set({
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: session.subscription as string,
+      plan: 'pro',
+      status: 'active',
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    await db.collection('usage').doc(userId).set({
+      plan: 'pro',
+      audit_limit: 999999, // Unlimited
+      audits_used: 0,
+      last_reset: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+  } catch (error) {
+    console.error('❌ Error handling checkout session:', error);
+  }
+}
+
+// Updated handler for subscription updates
+async function handleSubscriptionUpdated(subscription: any) {
+  try {
+    const customerId = subscription.customer as string;
+    
+    // Look up user by Stripe customer ID in user_subscription_status
+    const usersSnapshot = await db.collection('user_subscription_status')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    
+    if (!usersSnapshot.empty) {
+      const userId = usersSnapshot.docs[0].id;
+      const status = subscription.status;
+      
+      await db.collection('user_subscription_status').doc(userId).update({
+        status: status,
+        plan: status === 'active' ? 'pro' : 'free',
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      console.log(`✅ Updated subscription status for user ${userId}: ${status}`);
+      
+      // Update legacy collections
+      await db.collection('subscriptions').doc(userId).update({
+        status: status,
+        plan: status === 'active' ? 'pro' : 'free',
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      await db.collection('usage').doc(userId).update({
+        plan: status === 'active' ? 'pro' : 'free',
+        audit_limit: status === 'active' ? 999999 : 5,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error handling subscription update:', error);
+  }
+}
+
+// Updated handler for subscription deletion
+async function handleSubscriptionDeleted(subscription: any) {
+  try {
+    const customerId = subscription.customer as string;
+    
+    const usersSnapshot = await db.collection('user_subscription_status')
+      .where('stripeCustomerId', '==', customerId)
+      .limit(1)
+      .get();
+    
+    if (!usersSnapshot.empty) {
+      const userId = usersSnapshot.docs[0].id;
+      
+      await db.collection('user_subscription_status').doc(userId).update({
+        status: 'canceled',
+        plan: 'free',
+        updatedAt: FieldValue.serverTimestamp(),
+        canceledAt: FieldValue.serverTimestamp(),
+      });
+
+      console.log(`⚠️ Subscription canceled for user ${userId}`);
+      
+      // Update legacy collections
+      await db.collection('subscriptions').doc(userId).update({
+        status: 'canceled',
+        plan: 'free',
+        updatedAt: FieldValue.serverTimestamp()
+      });
+
+      await db.collection('usage').doc(userId).update({
+        plan: 'free',
+        audit_limit: 5,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+  } catch (error) {
+    console.error('❌ Error handling subscription deletion:', error);
+  }
+}
+
+// In your main webhook handler switch statement, update these cases:
+/*
+case 'checkout.session.completed': {
+  const session = event.data.object;
+  await handleCheckoutSessionCompleted(session);
+  break;
+}
+
+case 'customer.subscription.updated': {
+  const subscription = event.data.object;
+  await handleSubscriptionUpdated(subscription);
+  break;
+}
+
+case 'customer.subscription.deleted': {
+  const subscription = event.data.object;
+  await handleSubscriptionDeleted(subscription);
+  break;
+}
+*/
