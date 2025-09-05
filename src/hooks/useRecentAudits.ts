@@ -29,7 +29,7 @@ export interface AuditRecord {
   };
   outlet?: string;
   sources?: Array<{ outlet: string; url: string }>;
-  createdAt: string | Date | Timestamp; // ISO string for localStorage
+  createdAt: string | Date | { toDate(): Date } | any; // ISO string for localStorage, Date object, or Firestore Timestamp
   userId?: string;
   userEmail?: string;
   localOnly?: boolean; // flag for audits not yet synced to Firestore

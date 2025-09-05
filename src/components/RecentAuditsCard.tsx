@@ -113,7 +113,19 @@ const RecentAuditsCard = React.memo(function RecentAuditsCard() {
             }
             const title = audit.title || audit.summary?.substring(0, 60) + '...' || 'Untitled Audit';
             const outlet = audit.outlet || host;
-            const created = new Date(audit.createdAt).toLocaleDateString('en-US', { 
+            // Handle Firestore Timestamp, Date object, or string
+            let createdDate: Date;
+            if (typeof audit.createdAt === 'string') {
+              createdDate = new Date(audit.createdAt);
+            } else if (audit.createdAt && typeof audit.createdAt === 'object' && 'toDate' in audit.createdAt) {
+              // Firestore Timestamp
+              createdDate = audit.createdAt.toDate();
+            } else if (audit.createdAt instanceof Date) {
+              createdDate = audit.createdAt;
+            } else {
+              createdDate = new Date();
+            }
+            const created = createdDate.toLocaleDateString('en-US', { 
               month: 'short', 
               day: 'numeric',
               hour: '2-digit',
