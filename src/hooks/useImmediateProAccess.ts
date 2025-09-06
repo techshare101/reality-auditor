@@ -9,12 +9,20 @@ import { useAuth } from '@/contexts/AuthContext';
  * This provides a better UX by not making users wait for webhook processing
  */
 export function useImmediateProAccess() {
+  const [isMounted, setIsMounted] = useState(false);
   const searchParams = useSearchParams();
   const { user } = useAuth();
   const [hasJustUpgraded, setHasJustUpgraded] = useState(false);
   const [sessionId, setSessionId] = useState<string | null>(null);
 
+  // Ensure we only run on client side
   useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isMounted) return;
+    
     // Check if user just came back from Stripe checkout success
     const upgrade = searchParams?.get('upgrade');
     const session = searchParams?.get('session_id');
@@ -32,13 +40,15 @@ export function useImmediateProAccess() {
         email: user.email
       };
       
-      sessionStorage.setItem('reality_auditor_pro_upgrade', JSON.stringify(upgradeData));
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem('reality_auditor_pro_upgrade', JSON.stringify(upgradeData));
+      }
     }
-  }, [searchParams, user]);
+  }, [searchParams, user, isMounted]);
 
   // Check sessionStorage for recent upgrade
   useEffect(() => {
-    if (!hasJustUpgraded && user) {
+    if (!isMounted || !hasJustUpgraded && user && typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('reality_auditor_pro_upgrade');
       if (stored) {
         try {
@@ -55,27 +65,31 @@ export function useImmediateProAccess() {
         }
       }
     }
-  }, [user, hasJustUpgraded]);
+  }, [user, hasJustUpgraded, isMounted]);
 
   // Clear upgrade flag after webhook has had time to process (5 minutes)
   useEffect(() => {
-    if (hasJustUpgraded) {
+    if (hasJustUpgraded && isMounted) {
       const timer = setTimeout(() => {
         console.log('🔄 Clearing temporary Pro access flag (webhook should have processed by now)');
-        sessionStorage.removeItem('reality_auditor_pro_upgrade');
+        if (typeof window !== 'undefined') {
+          sessionStorage.removeItem('reality_auditor_pro_upgrade');
+        }
         setHasJustUpgraded(false);
       }, 5 * 60 * 1000); // 5 minutes
 
       return () => clearTimeout(timer);
     }
-  }, [hasJustUpgraded]);
+  }, [hasJustUpgraded, isMounted]);
 
   return {
     hasJustUpgraded,
     sessionId,
     // Helper to manually clear the upgrade status
     clearUpgradeStatus: () => {
-      sessionStorage.removeItem('reality_auditor_pro_upgrade');
+      if (typeof window !== 'undefined') {
+        sessionStorage.removeItem('reality_auditor_pro_upgrade');
+      }
       setHasJustUpgraded(false);
       setSessionId(null);
     }

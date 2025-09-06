@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import RealityAuditorApp from "@/components/RealityAuditor";
 import demoResult from "@/lib/demoPayload";
 
@@ -25,7 +25,9 @@ export default function DemoPage() {
             🔄 Reset Demo
           </button>
         </div>
-        <RealityAuditorApp key={key} initialData={data} demoMode />
+        <Suspense fallback={<div className="text-center py-8">Loading demo...</div>}>
+          <RealityAuditorApp key={key} initialData={data} demoMode />
+        </Suspense>
       </div>
     </div>
   );
