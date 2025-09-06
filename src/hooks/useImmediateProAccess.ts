@@ -48,7 +48,9 @@ export function useImmediateProAccess() {
 
   // Check sessionStorage for recent upgrade
   useEffect(() => {
-    if (!isMounted || !hasJustUpgraded && user && typeof window !== 'undefined') {
+    if (!isMounted || hasJustUpgraded || !user) return;
+    
+    if (typeof window !== 'undefined') {
       const stored = sessionStorage.getItem('reality_auditor_pro_upgrade');
       if (stored) {
         try {
