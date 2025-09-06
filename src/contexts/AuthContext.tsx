@@ -82,7 +82,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const signIn = async (email: string, password: string) => {
-    await signInWithEmailAndPassword(auth, email, password);
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      // Create usage record if it doesn't exist
+      if (result.user) {
+        const usageRef = doc(db, 'usage', result.user.uid);
+        try {
+          const usageSnap = await getDoc(usageRef);
+          if (!usageSnap.exists()) {
+            await setDoc(usageRef, {
+              audits_used: 0,
+              audit_limit: 5,
+              plan: 'free',
+              created_at: new Date().toISOString(),
+              last_reset: new Date().toISOString()
+            });
+            console.log('✅ Created missing usage record for user:', result.user.uid);
+          }
+        } catch (err) {
+          console.error('Error ensuring usage record:', err);
+          // Don't block sign in for usage record error
+        }
+      }
+    } catch (err: any) {
+      // Handle Firebase auth errors
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+        throw new Error('Invalid email or password');
+      } else if (err.code === 'auth/invalid-email') {
+        throw new Error('Invalid email format');
+      } else if (err.code === 'auth/too-many-requests') {
+        throw new Error('Too many sign-in attempts. Please try again later.');
+      }
+      // Re-throw unknown errors
+      throw err;
+    }
   };
 
   const signUp = async (email: string, password: string) => {
