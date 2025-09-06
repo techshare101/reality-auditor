@@ -6,9 +6,11 @@ import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
 import { LocalUsageTracker } from "@/lib/local-usage-tracker";
 import { hasPaidPlan as checkHasPaidPlan } from "@/lib/hasPaidPlan";
+import { useImmediateProAccess } from "@/hooks/useImmediateProAccess";
 
 export function useHybridAuditLimit(defaultLimit: number = 5) {
   const { user } = useAuth();
+  const { hasJustUpgraded } = useImmediateProAccess();
   const [count, setCount] = useState(0);
   const [limit, setLimit] = useState(defaultLimit);
   const [hasPaidSubscription, setHasPaidSubscription] = useState(false);
@@ -37,7 +39,15 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
 
     // Check Pro status using bulletproof helper
     const checkProStatus = async () => {
-      // FIRST: Check if this is a guaranteed Pro email
+      // FIRST: Check if user just upgraded
+      if (hasJustUpgraded) {
+        console.log(`🚀 IMMEDIATE PRO ACCESS GRANTED - User just upgraded via Stripe!`);
+        setHasPaidSubscription(true);
+        setLoading(false);
+        return;
+      }
+      
+      // SECOND: Check if this is a guaranteed Pro email
       if (user.email && GUARANTEED_PRO_EMAILS.includes(user.email.toLowerCase())) {
         console.log(`✨ GUARANTEED PRO EMAIL DETECTED: ${user.email}`);
         setHasPaidSubscription(true);
@@ -175,12 +185,15 @@ export function useHybridAuditLimit(defaultLimit: number = 5) {
   }, [user, isUsingLocalFallback]);
 
   const hasPaidPlan = useCallback(() => {
-    return hasPaidSubscription;
-  }, [hasPaidSubscription]);
+    // Include immediate Pro access from recent upgrade
+    return hasPaidSubscription || hasJustUpgraded;
+  }, [hasPaidSubscription, hasJustUpgraded]);
 
-  const isOverLimit = count >= limit && !hasPaidSubscription;
-  const remaining = Math.max(0, limit - count);
-  const percentUsed = limit > 0 ? (count / limit) * 100 : 0;
+  // Check both regular Pro status AND immediate upgrade status
+  const isEffectivelyPro = hasPaidSubscription || hasJustUpgraded;
+  const isOverLimit = count >= limit && !isEffectivelyPro;
+  const remaining = isEffectivelyPro ? 999 : Math.max(0, limit - count);
+  const percentUsed = isEffectivelyPro ? 0 : (limit > 0 ? (count / limit) * 100 : 0);
 
   return {
     count,
