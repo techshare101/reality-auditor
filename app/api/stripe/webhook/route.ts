@@ -4,8 +4,50 @@ import Stripe from "stripe";
 import { db as adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-09-30.acacia",
+});
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+
+// Enhanced debug logging helper
+function logWebhookEvent(event: Stripe.Event) {
+  console.log(`\n🎯 Webhook Event: ${event.type}`);
+  console.log(`🔑 Event ID: ${event.id}`);
+  if (event.data?.object) {
+    console.log(`📦 Object ID: ${(event.data.object as any).id}`);
+    console.log(`📋 Metadata:`, (event.data.object as any).metadata);
+  }
+}
+
+// Helper to update subscription status in both collections
+async function updateSubscription(uid: string, data: { 
+  plan: "pro" | "free";
+  status: string;
+  subscriptionId?: string;
+  customerId?: string;
+  current_period_end?: Date | null;
+  updatedAt: Date;
+}) {
+  console.log(`🔄 Updating subscription for user ${uid}:`, data);
+
+  // Write to user_subscriptions collection
+  await adminDb
+    .collection("user_subscriptions")
+    .doc(uid)
+    .set(data, { merge: true });
+
+  // Mirror essential fields to users collection
+  await adminDb
+    .collection("users")
+    .doc(uid)
+    .set({
+      plan: data.plan,
+      status: data.status,
+      updatedAt: FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+  console.log(`✅ Successfully updated subscription status in both collections`);
+}
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -21,7 +63,9 @@ export async function POST(req: Request) {
   let event: Stripe.Event;
 
   try {
+    console.log('🔐 Attempting signature verification...');
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    console.log('✅ Signature verified!');
   } catch (err) {
     console.error("❌ Webhook signature verification failed:", err);
     return NextResponse.json(
@@ -36,45 +80,29 @@ export async function POST(req: Request) {
         const session = event.data.object as Stripe.Checkout.Session;
         const customerId = session.customer as string;
         const userEmail = session.customer_email;
-        const userId = session.metadata?.userId;
+        const userId = session.metadata?.userId || session.metadata?.uid;
 
-        console.log("✅ Checkout completed for:", userEmail);
+        console.log(`\n💫 Processing checkout.session.completed`);
+        console.log(`📧 Customer email: ${userEmail}`);
+        console.log(`👤 User ID: ${userId}`);
+        console.log(`💳 Customer ID: ${customerId}`);
+        console.log(`🔄 Subscription ID: ${session.subscription}`);
 
-        // Store user subscription status
-        if (userEmail && userId) {
-          await adminDb
-            .collection("users")
-            .doc(userId)
-            .set(
-              {
-                stripeCustomerId: customerId,
-                subscription: {
-                  plan: session.metadata?.plan || "pro",
-                  status: "active",
-                  stripeSessionId: session.id,
-                  amount: session.amount_total ? session.amount_total / 100 : 0,
-                  currency: session.currency,
-                },
-                email: userEmail,
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
-
-          // Also update the subscription collection for easy querying
-          await adminDb
-            .collection("subscriptions")
-            .doc(userId)
-            .set({
-              userId,
-              email: userEmail,
-              stripeCustomerId: customerId,
-              plan: session.metadata?.plan || "pro",
-              status: "active",
-              currentPeriodStart: new Date(),
-              updatedAt: FieldValue.serverTimestamp(),
-            });
+        if (!userId) {
+          console.error("❌ No userId found in session metadata");
+          return NextResponse.json({ error: "No user ID in metadata" }, { status: 400 });
         }
+
+          console.log(`\n🔄 Updating Firestore for user ${userId}...`);
+          await updateSubscription(userId, {
+            plan: "pro",
+            status: "active",
+            subscriptionId: session.subscription as string,
+            customerId: customerId,
+            current_period_end: session.expires_at ? new Date(session.expires_at * 1000) : null,
+            updatedAt: new Date(),
+          });
+          console.log(`✅ Firestore update complete!`);
         break;
       }
 
@@ -96,34 +124,14 @@ export async function POST(req: Request) {
           const userDoc = usersSnapshot.docs[0];
           const userId = userDoc.id;
           
-          await userDoc.ref.set(
-            {
-              subscription: {
-                plan: subscription.items.data[0].price.nickname || "pro",
-                status: subscription.status,
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
-                cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
-              },
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
-
-          // Update subscription collection
-          await adminDb
-            .collection("subscriptions")
-            .doc(userId)
-            .set(
-              {
-                plan: subscription.items.data[0].price.nickname || "pro",
-                status: subscription.status,
-                currentPeriodEnd: new Date((subscription as any).current_period_end * 1000),
-                currentPeriodStart: new Date((subscription as any).current_period_start * 1000),
-                cancelAtPeriodEnd: (subscription as any).cancel_at_period_end,
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
+          await updateSubscription(userId, {
+            plan: subscription.status === "active" ? "pro" : "free",
+            status: subscription.status,
+            subscriptionId: subscription.id,
+            customerId: customerId,
+            current_period_end: new Date(subscription.current_period_end * 1000),
+            updatedAt: new Date(),
+          });
         }
         break;
       }
@@ -145,37 +153,15 @@ export async function POST(req: Request) {
           const userDoc = usersSnapshot.docs[0];
           const userId = userDoc.id;
           
-          await userDoc.ref.set(
-            {
-              subscription: {
-                plan: "free",
-                status: "cancelled",
-                cancelledAt: FieldValue.serverTimestamp(),
-              },
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
-
-          // Update subscription collection
-          await adminDb
-            .collection("subscriptions")
-            .doc(userId)
-            .set(
-              {
-                status: "cancelled",
-                cancelledAt: FieldValue.serverTimestamp(),
-                updatedAt: FieldValue.serverTimestamp(),
-              },
-              { merge: true }
-            );
+          await updateSubscription(userId, {
+            plan: "free",
+            status: "cancelled",
+            subscriptionId: subscription.id,
+            customerId: customerId,
+            current_period_end: null,
+            updatedAt: new Date(),
+          });
         }
-        break;
-      }
-
-      case "invoice.payment_succeeded": {
-        const invoice = event.data.object as Stripe.Invoice;
-        console.log("💰 Payment succeeded for invoice:", invoice.id);
         break;
       }
 
@@ -195,17 +181,14 @@ export async function POST(req: Request) {
         if (!usersSnapshot.empty) {
           const userDoc = usersSnapshot.docs[0];
           
-          await userDoc.ref.set(
-            {
-              subscription: {
-                status: "past_due",
-                paymentFailed: true,
-                lastPaymentFailure: FieldValue.serverTimestamp(),
-              },
-              updatedAt: FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
+          await updateSubscription(userDoc.id, {
+            plan: "pro",  // Keep them on pro but mark as past_due
+            status: "past_due",
+            subscriptionId: invoice.subscription as string,
+            customerId: customerId,
+            current_period_end: null,
+            updatedAt: new Date(),
+          });
         }
         break;
       }

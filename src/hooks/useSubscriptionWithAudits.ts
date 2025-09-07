@@ -1,16 +1,10 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { doc, onSnapshot, collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { collection, query, where, getDocs, Timestamp } from "firebase/firestore";
+import { useSubscriptionStatus } from './useSubscriptionStatus';
 import { auth, db } from "@/lib/firebase";
 import { onAuthStateChanged, User } from "firebase/auth";
-
-type SubscriptionStatus = {
-  plan: string;
-  status: string;
-  stripeCustomerId?: string;
-  updatedAt: Date | null;
-};
 
 type AuditStats = {
   count: number;
@@ -21,7 +15,6 @@ type AuditStats = {
 
 export function useSubscriptionWithAudits() {
   const [user, setUser] = useState<User | null>(null);
-  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [auditStats, setAuditStats] = useState<AuditStats>({
     count: 0,
     limit: 5,
@@ -35,7 +28,6 @@ export function useSubscriptionWithAudits() {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser);
       if (!firebaseUser) {
-        setSubscription(null);
         setAuditStats({
           count: 0,
           limit: 5,
@@ -49,55 +41,34 @@ export function useSubscriptionWithAudits() {
     return () => unsubAuth();
   }, []);
 
-  // Listen to subscription and count audits
+  // Use the new subscription hook
+  const { subscription, isPro, planLimit, loading: subLoading } = useSubscriptionStatus(user?.uid || null);
+
+  // Count audits for this month
   useEffect(() => {
+    let mounted = true;
     if (!user) return;
 
-    // Listen to subscription status
-    const subRef = doc(db, "user_subscription_status", user.uid);
-    const unsubSub = onSnapshot(
-      subRef,
-      (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          setSubscription({
-            plan: data.plan || 'free',
-            status: data.status || 'inactive',
-            stripeCustomerId: data.stripeCustomerId,
-            updatedAt: data.updatedAt ? data.updatedAt.toDate() : null,
-          });
-        } else {
-          setSubscription({
-            plan: 'free',
-            status: 'inactive',
-            updatedAt: null,
-          });
-        }
-      }
-    );
-
-    // Count audits for this month (if free user)
     const countAudits = async () => {
-      if (subscription?.plan === 'pro' && subscription?.status === 'active') {
-        setAuditStats({
-          count: 0,
-          limit: Infinity,
-          remaining: Infinity,
-          percentUsed: 0
-        });
-        setLoading(false);
-        return;
-      }
-
       try {
-        // Get current month start
+        if (isPro) {
+          if (!mounted) return;
+          setAuditStats({ 
+            count: 0, 
+            limit: planLimit, 
+            remaining: planLimit, 
+            percentUsed: 0 
+          });
+          setLoading(false);
+          return;
+        }
+
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         
-        // Query audits for current month
         const auditsQuery = query(
           collection(db, 'audits'),
-          where('userId', '==', user.uid),
+          where('userId', '==', currentUser.uid),
           where('createdAt', '>=', Timestamp.fromDate(monthStart))
         );
         
@@ -105,6 +76,7 @@ export function useSubscriptionWithAudits() {
         const count = snapshot.size;
         const limit = 5; // Free tier limit
         
+        if (!mounted) return;
         setAuditStats({
           count,
           limit,
@@ -113,19 +85,25 @@ export function useSubscriptionWithAudits() {
         });
       } catch (error) {
         console.error('Error counting audits:', error);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      
-      setLoading(false);
     };
 
+    // Initial count
     countAudits();
 
-    return () => unsubSub();
-  }, [user, subscription]);
+    return () => {
+      mounted = false;
+    };
+  }, [user, isPro, planLimit]);
 
-  const isPro = subscription?.status === 'active' && subscription?.plan === 'pro';
+  // Re-export subscription status
   const canAudit = isPro || auditStats.remaining > 0;
-  const isOverLimit = !isPro && auditStats.count >= auditStats.limit;
+  const isOverLimit = !isPro && auditStats.count >= planLimit;
+
+  // Loading state combines subscription and audit loading
+  const isLoading = loading || subLoading;
 
   // Refresh audit count
   const refreshAuditCount = useCallback(async () => {
@@ -143,18 +121,18 @@ export function useSubscriptionWithAudits() {
     const snapshot = await getDocs(auditsQuery);
     const count = snapshot.size;
     
-    setAuditStats(prev => ({
-      ...prev,
+    setAuditStats({
       count,
-      remaining: Math.max(0, prev.limit - count),
-      percentUsed: (count / prev.limit) * 100
-    }));
-  }, [user, isPro]);
+      limit: planLimit,
+      remaining: Math.max(0, planLimit - count),
+      percentUsed: (count / planLimit) * 100
+    });
+  }, [user, isPro, planLimit]);
 
   return {
     user,
     subscription,
-    loading,
+    loading: isLoading,
     isPro,
     canAudit,
     isOverLimit,

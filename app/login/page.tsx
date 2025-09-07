@@ -19,18 +19,26 @@ const Particle = ({ index }: { index: number }) => {
   });
 
   useEffect(() => {
+    // Ensure we only run this on the client side
+    if (typeof window === 'undefined') return;
+    
+    // Set mounted first to avoid flashing
     setMounted(true);
-    if (typeof window !== 'undefined') {
-      setParticleData({
-        x: [Math.random() * window.innerWidth, Math.random() * window.innerWidth],
-        y: [Math.random() * window.innerHeight, Math.random() * window.innerHeight],
-        left: Math.random() * 100,
-        top: Math.random() * 100,
-        duration: Math.random() * 15 + 15
-      });
-    }
+    
+    // Calculate particle data with window dimensions
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    
+    setParticleData({
+      x: [Math.random() * width, Math.random() * width],
+      y: [Math.random() * height, Math.random() * height],
+      left: Math.random() * 100,
+      top: Math.random() * 100,
+      duration: Math.random() * 15 + 15
+    });
   }, []);
 
+  // Return null during SSR and initial client render
   if (!mounted) return null;
 
   return (
@@ -75,12 +83,18 @@ const ParticlesBackground = () => {
 };
 
 export default function LoginPage() {
+  const [mounted, setMounted] = useState(false);
+
+  // Ensure hydration is complete before rendering form
+  useEffect(() => {
+    setMounted(true);
+  }, []);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
-  const { signIn, signInWithGoogle, user } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user } = useAuth();
   const router = useRouter();
   
   // Redirect if already logged in
@@ -98,10 +112,40 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // Try to sign in first
       await signIn(email, password);
       router.push("/dashboard");
     } catch (err: any) {
-      setError(err.message || "Failed to sign in");
+      console.error('Sign in error:', err);
+      
+      // Extract error code and message
+      const errorCode = err.code;
+      const errorMessage = err.message;
+
+      if (errorCode === 'auth/invalid-credential') {
+        // Check if email exists by trying to create an account
+        try {
+          await signUp(email, password);
+          // If signup succeeds, new account created
+          await signIn(email, password);
+          router.push("/dashboard");
+        } catch (signupErr: any) {
+          console.error('Signup error:', signupErr);
+          
+          if (signupErr.code === "auth/email-already-in-use") {
+            // Email exists but password is wrong
+            setError("Incorrect password. Please try again.");
+          } else {
+            setError(signupErr.message || "Failed to create account");
+          }
+        }
+      } else if (errorCode === 'auth/invalid-email') {
+        setError("Please enter a valid email address");
+      } else if (errorCode === 'auth/too-many-requests') {
+        setError("Too many attempts. Please try again later.");
+      } else {
+        setError(errorMessage || "Failed to sign in");
+      }
     } finally {
       setLoading(false);
     }
@@ -122,6 +166,19 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  // Return a loading state or simplified version during server-side rendering
+  if (!mounted) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
+        <div className="w-full max-w-md bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl rounded-3xl p-8 relative">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
@@ -146,9 +203,9 @@ export default function LoginPage() {
 
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-            Welcome Back
+            Welcome
           </h1>
-          <p className="mt-2 text-gray-400">Sign in to audit reality</p>
+          <p className="mt-2 text-gray-400">Sign in or create your account to audit reality</p>
         </div>
 
         {error && (
@@ -163,37 +220,41 @@ export default function LoginPage() {
         )}
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div>
-            <label className="block text-sm text-gray-300 mb-2 font-medium">
-              Email Address
-            </label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
-                required
-              />
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <label htmlFor="email" className="block text-sm text-gray-300 font-medium">
+                Email Address
+              </label>
+              <div className="relative">
+                <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                  required
+                />
+              </div>
             </div>
-          </div>
 
-          <div>
-            <label className="block text-sm text-gray-300 mb-2 font-medium">
-              Password
-            </label>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
-                required
-              />
+            <div className="space-y-2">
+              <label htmlFor="password" className="block text-sm text-gray-300 font-medium">
+                Password
+              </label>
+              <div className="relative">
+                <Lock className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  className="w-full pl-12 pr-4 py-3 rounded-xl bg-white/5 border border-white/10 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all"
+                  required
+                />
+              </div>
             </div>
           </div>
 
@@ -209,7 +270,7 @@ export default function LoginPage() {
               </>
             ) : (
               <>
-                Sign In ⚡
+                Continue ⚡
               </>
             )}
           </button>
@@ -241,10 +302,7 @@ export default function LoginPage() {
         </div>
 
         <p className="mt-8 text-center text-gray-400 text-sm">
-          Don't have an account?{" "}
-          <Link href="/signup" className="text-purple-400 hover:text-purple-300 font-medium transition-colors">
-            Sign up for free
-          </Link>
+          First time here? Just enter your email and password above – we'll create your account automatically!
         </p>
 
         <p className="mt-4 text-center">

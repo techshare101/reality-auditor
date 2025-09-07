@@ -5,12 +5,27 @@ import { CheckCircle, ArrowRight, Sparkles, Crown, Zap } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
+import { setJustPaid, storeSubscriptionState } from "@/lib/subscriptionStorage";
+import { useAuth } from "@/contexts/AuthContext";
 import MarketingLayout from "@/components/MarketingLayout";
 
 function SuccessContent() {
+  const { user } = useAuth();
   const searchParams = useSearchParams();
   const sessionId = searchParams?.get("session_id");
   const [customerEmail, setCustomerEmail] = useState<string | null>(null);
+
+  // Set optimistic state
+  useEffect(() => {
+    setJustPaid();
+    if (user?.uid) {
+      storeSubscriptionState({
+        plan: "pro",
+        status: "active",
+        updatedAt: new Date().toISOString()
+      });
+    }
+  }, [user]);
 
   useEffect(() => {
     // Optional: Fetch session details to show customer info

@@ -7,12 +7,26 @@ const firebaseAdminConfig = {
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
 };
 
-// Initialize Firebase Admin with multiple fallback strategies
+// Initialize Firebase Admin with base64 credentials
 let adminApp;
 if (!getApps().length) {
   try {
-    // Strategy 1: Try service account key from environment
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    // Check for base64 credentials first
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64) {
+      console.log('📋 Using Firebase service account key from base64');
+      const decodedCreds = Buffer.from(
+        process.env.FIREBASE_SERVICE_ACCOUNT_KEY_BASE64,
+        'base64'
+      ).toString('utf-8');
+      const serviceAccount = JSON.parse(decodedCreds);
+      adminApp = initializeApp({
+        credential: cert(serviceAccount),
+        ...firebaseAdminConfig
+      });
+      console.log('✅ Firebase Admin initialized with base64 service account');
+    }
+    // Fallback to JSON credentials
+    else if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
       console.log('📋 Using Firebase service account key from environment');
       const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
       adminApp = initializeApp({
@@ -20,29 +34,28 @@ if (!getApps().length) {
         ...firebaseAdminConfig
       });
       console.log('✅ Firebase Admin initialized with service account');
-    } 
-    // Strategy 2: Try Application Default Credentials (for local gcloud login)
-    else {
-      console.log('🔑 Attempting to use Application Default Credentials');
-      adminApp = initializeApp({
-        credential: applicationDefault(),
-        ...firebaseAdminConfig
-      });
-      console.log('✅ Firebase Admin initialized with Application Default Credentials');
     }
-  } catch (error) {
-    console.error('❌ Firebase Admin initialization failed:', error instanceof Error ? error.message : String(error));
-    console.log('🔧 Creating minimal Firebase Admin app for development');
-    
-    // Strategy 3: Minimal config for development (limited functionality)
-    try {
+    // Development fallback
+    else if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 Creating minimal Firebase Admin app for development');
       adminApp = initializeApp({
         projectId: firebaseAdminConfig.projectId,
       });
       console.log('⚠️ Firebase Admin running in limited mode (no credentials)');
-    } catch (fallbackError) {
-      console.error('💥 Complete Firebase Admin initialization failed:', fallbackError instanceof Error ? fallbackError.message : String(fallbackError));
-      throw new Error('Unable to initialize Firebase Admin SDK');
+    }
+    else {
+      throw new Error('No Firebase credentials available');
+    }
+  } catch (error) {
+    console.error('❌ Firebase Admin initialization failed:', error instanceof Error ? error.message : String(error));
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔧 Falling back to minimal development app');
+      adminApp = initializeApp({
+        projectId: firebaseAdminConfig.projectId,
+      });
+      console.log('⚠️ Firebase Admin running in limited mode (no credentials)');
+    } else {
+      throw error;
     }
   }
 } else {

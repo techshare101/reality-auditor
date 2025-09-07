@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, ChevronUp, X, Maximize2 } from "lucide-react";
 
 interface CollapsibleTextProps {
-  text: string;
+  text?: string | null;
   title?: string;
   maxLines?: number;
   className?: string;
@@ -22,13 +22,25 @@ export default function CollapsibleText({
   const [isExpanded, setIsExpanded] = useState(false);
   const [showModalView, setShowModalView] = useState(false);
 
+  // Handle empty or invalid text
+  const safeText = text || '';
+  
   // Determine if text needs truncation
-  const words = text.split(' ');
+  const words = safeText.split(' ');
   const isLongText = words.length > 50; // Roughly more than 4-5 lines
 
   const truncatedText = isLongText && !isExpanded 
     ? words.slice(0, 50).join(' ') + '...' 
-    : text;
+    : safeText;
+    
+  // If no text, show a placeholder
+  if (!safeText) {
+    return (
+      <div className={`relative ${className}`}>
+        <p className="text-gray-400 italic">No content available</p>
+      </div>
+    );
+  }
 
   return (
     <>

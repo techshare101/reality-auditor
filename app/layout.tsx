@@ -33,6 +33,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
+      </head>
       <body
         className={`${inter.variable} antialiased font-sans bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white min-h-screen`}
       >

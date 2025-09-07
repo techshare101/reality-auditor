@@ -244,7 +244,7 @@ export default function AuditResult({ data, url }: AuditResultProps) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <CollapsibleText text={data.main_analysis} />
+          <CollapsibleText text={data.main_analysis || 'No analysis available'} title="Main Analysis" />
         </CardContent>
       </Card>
 
@@ -301,7 +301,7 @@ export default function AuditResult({ data, url }: AuditResultProps) {
               {data.bias_analysis.explanation && (
                 <div>
                   <h4 className="font-semibold mb-2">Explanation:</h4>
-                  <CollapsibleText text={data.bias_analysis.explanation} />
+                  <CollapsibleText text={data.bias_analysis.explanation || 'No explanation available'} title="Bias Analysis" />
                 </div>
               )}
             </div>
