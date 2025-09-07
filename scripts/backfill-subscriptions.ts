@@ -132,15 +132,16 @@ async function backfillSubscriptions(dryRun: boolean = true) {
       
       console.log(`✅ Found user ${userId} with email ${customerEmail}`);
 
+      const sub: any = subscription as any;
       await updateSubscriptionStatus(
         userId,
         {
           plan: "pro",
           status: "active",
-          subscriptionId: subscription.id,
-          customerId: customer.id,
-          current_period_end: new Date(subscription.current_period_end * 1000),
-          email: customer.email || undefined,
+          subscriptionId: sub.id,
+          customerId: (subscription.customer as any)?.id || (subscription.customer as string) || customer.id,
+          current_period_end: sub.current_period_end ? new Date(sub.current_period_end * 1000) : null,
+          email: (customer as any).email || undefined,
         },
         dryRun
       );
