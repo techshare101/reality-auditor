@@ -108,10 +108,11 @@ export async function POST(req: Request) {
 
       case "customer.subscription.updated":
       case "customer.subscription.created": {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any;  // Type as any for now since Stripe types are incomplete
         const customerId = subscription.customer as string;
 
         console.log("🔄 Subscription updated:", subscription.status);
+        console.log("📅 Current period end:", new Date(subscription.current_period_end * 1000));
 
         // Lookup user by customerId
         const usersSnapshot = await adminDb
@@ -129,7 +130,7 @@ export async function POST(req: Request) {
             status: subscription.status,
             subscriptionId: subscription.id,
             customerId: customerId,
-            current_period_end: new Date(subscription.current_period_end * 1000),
+            current_period_end: subscription.current_period_end ? new Date(subscription.current_period_end * 1000) : null,
             updatedAt: new Date(),
           });
         }
@@ -137,7 +138,7 @@ export async function POST(req: Request) {
       }
 
       case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription;
+        const subscription = event.data.object as any;  // Type as any for Stripe types compatibility
         const customerId = subscription.customer as string;
 
         console.log("❌ Subscription cancelled");
