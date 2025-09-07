@@ -182,10 +182,11 @@ export async function POST(req: Request) {
         if (!usersSnapshot.empty) {
           const userDoc = usersSnapshot.docs[0];
           
+          const inv: any = invoice as any;
           await updateSubscription(userDoc.id, {
             plan: "pro",  // Keep them on pro but mark as past_due
             status: "past_due",
-            subscriptionId: invoice.subscription as string,
+            subscriptionId: inv.subscription ?? undefined,
             customerId: customerId,
             current_period_end: null,
             updatedAt: new Date(),
