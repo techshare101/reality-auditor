@@ -231,7 +231,7 @@ export async function POST(req: NextRequest) {
           subscriptionId: subscription.id,
           plan: "pro",
           status: subscription.status,
-          periodEnd: new Date(subscription.current_period_end * 1000)
+          periodEnd: new Date((subscription as any).current_period_end * 1000)
         });
         
         logWebhookEvent(event, {
