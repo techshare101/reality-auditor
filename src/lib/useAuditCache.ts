@@ -1,6 +1,6 @@
 // src/lib/useAuditCache.ts
-import { useEffect, useState } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useEffect, useState, useCallback } from "react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const CACHE_KEY_PREFIX = "realityauditor:audits";
 
@@ -11,70 +11,70 @@ export type AuditPayload = {
   userId?: string; // Track which user created this
 };
 
+function getCacheKey(userId?: string) {
+  return userId ? `${CACHE_KEY_PREFIX}:${userId}` : CACHE_KEY_PREFIX;
+}
+
 export function useAuditCache(initial?: AuditPayload) {
   const { user } = useAuth();
-  const cacheKey = user ? `${CACHE_KEY_PREFIX}:${user.uid}` : CACHE_KEY_PREFIX;
-  
-  const [audits, setAudits] = useState<AuditPayload[]>(() => {
-    if (typeof window !== "undefined" && user) {
-      const raw = localStorage.getItem(cacheKey);
-      if (raw) {
-        try {
-          // Filter to only show current user's audits
-          const allAudits = JSON.parse(raw) as AuditPayload[];
-          return allAudits.filter(a => !a.userId || a.userId === user.uid);
-        } catch {
-          return [];
-        }
-      }
-    }
-    return initial ? [initial] : [];
-  });
+  const [audits, setAudits] = useState<AuditPayload[]>(initial ? [initial] : []);
 
-  // Re-load audits when user changes
+  // Load cached audits when component mounts or user changes
   useEffect(() => {
+    if (typeof window === "undefined") return;
+    
     if (!user) {
-      setAudits([]);
+      setAudits(initial ? [initial] : []);
       return;
     }
+
+    try {
+      const raw = localStorage.getItem(getCacheKey(user.uid));
+      if (!raw) return;
+
+      const allAudits = JSON.parse(raw) as AuditPayload[];
+      setAudits(allAudits.filter(a => !a.userId || a.userId === user.uid));
+    } catch (error) {
+      console.error('Error loading cached audits:', error);
+      setAudits(initial ? [initial] : []);
+    }
+  }, [user, initial]);
+
+  // Save audits to localStorage whenever they change
+  useEffect(() => {
+    if (!user || typeof window === "undefined") return;
     
-    const raw = localStorage.getItem(cacheKey);
-    if (raw) {
+    try {
+      localStorage.setItem(getCacheKey(user.uid), JSON.stringify(audits.slice(0, 5)));
+    } catch (error) {
+      console.error('Error saving audits to cache:', error);
+    }
+  }, [audits, user]);
+
+  const addAudit = useCallback(
+    (payload: Omit<AuditPayload, "createdAt" | "userId">) => {
+      if (!user) return;
+      
+      const newAudit: AuditPayload = {
+        ...payload,
+        createdAt: new Date().toISOString(),
+        userId: user.uid,
+      };
+      setAudits((prev) => [newAudit, ...prev].slice(0, 5));
+    },
+    [user]
+  );
+
+  const clearAudits = useCallback(() => {
+    setAudits([]);
+    if (user && typeof window !== "undefined") {
       try {
-        const allAudits = JSON.parse(raw) as AuditPayload[];
-        setAudits(allAudits.filter(a => !a.userId || a.userId === user.uid));
-      } catch {
-        setAudits([]);
+        localStorage.removeItem(getCacheKey(user.uid));
+      } catch (error) {
+        console.error('Error clearing audits cache:', error);
       }
     }
-  }, [user?.uid, cacheKey]);
-
-  useEffect(() => {
-    if (user) {
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(audits.slice(0, 5)));
-      } catch {}
-    }
-  }, [audits, cacheKey, user]);
-
-  function addAudit(payload: Omit<AuditPayload, "createdAt" | "userId">) {
-    if (!user) return;
-    
-    const newAudit: AuditPayload = {
-      ...payload,
-      createdAt: new Date().toISOString(),
-      userId: user.uid,
-    };
-    setAudits((prev) => [newAudit, ...prev].slice(0, 5));
-  }
-
-  function clearAudits() {
-    setAudits([]);
-    if (user) {
-      try { localStorage.removeItem(cacheKey); } catch {}
-    }
-  }
+  }, [user]);
 
   return { audits, addAudit, clearAudits };
 }
-

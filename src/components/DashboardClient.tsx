@@ -2,7 +2,7 @@
 
 import { useAuth } from "@/contexts/AuthContext";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { User, LogOut, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuditCache } from "@/lib/useAuditCache";
@@ -18,18 +18,60 @@ import Image from "next/image";
 import { useSubscriptionSync } from "@/hooks/useSubscriptionSync";
 
 export default function DashboardClient() {
-  const { user, logout } = useAuth();
+  // All hooks must be called unconditionally at the top level
+  const { user, logout, loading: authLoading } = useAuth();
   const router = useRouter();
-  const { clearAudits } = useAuditCache();
   const searchParams = useSearchParams();
+  
+  // State management
+  const [isLoading, setIsLoading] = useState(true);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
+
+  // Handle logout callback
+  const handleLogout = useCallback(async () => {
+    try {
+      await logout();
+      router.push('/');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  }, [logout, router]);
+  
+  // URL parameters
   const debugMode = searchParams?.get('debug') === '1';
   const upgrade = searchParams?.get('upgrade');
   const sessionId = searchParams?.get('session_id');
-  
-  // Sync subscription status on login
-  useSubscriptionSync();
 
-  // Handle checkout redirect
+  // Handle loading timeout
+  useEffect(() => {
+    const timer = setTimeout(() => setIsLoading(false), 500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Handle session verification
+  useEffect(() => {
+    if (upgrade === 'success' && sessionId) {
+      fetch(`/api/verify-session?session_id=${sessionId}`)
+        .then(() => {
+          setShowSuccess(true);
+          router.replace('/dashboard');
+        })
+        .catch(() => setShowError(true));
+    } else if (upgrade === 'cancelled') {
+      showToast.info(
+        "Upgrade Cancelled",
+        "You're still on the Free Plan. Upgrade anytime!"
+      );
+      router.replace('/dashboard');
+    }
+  }, [upgrade, sessionId, router]);
+
+  if (!user) {
+    // Even if no user, still register hooks above consistently
+  }
+
+  // Show success/error notifications
   useEffect(() => {
     if (upgrade === 'success' && sessionId) {
       // Verify the session and update Firestore
@@ -58,21 +100,41 @@ export default function DashboardClient() {
     }
   }, [upgrade, sessionId, router]);
 
-  const handleLogout = useCallback(async () => {
-    try {
-      await logout();
-      router.push('/');
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  }, [logout, router]);
 
-  const handleClearCache = useCallback(() => {
-    if (confirm('Clear local audit history? This only affects this device.')) {
-      clearAudits();
-    }
-  }, [clearAudits]);
 
+  if (!user) return null;
+
+  // Show success/error notifications
+  useEffect(() => {
+    if (showSuccess) {
+      showToast.success(
+        "🎉 Welcome to Reality Auditor Pro!",
+        "Unlimited audits unlocked. Your dashboard is updating..."
+      );
+      setShowSuccess(false);
+    }
+    if (showError) {
+      showToast.error(
+        "Verification Failed",
+        "Please refresh the page or contact support."
+      );
+      setShowError(false);
+    }
+  }, [showSuccess, showError]);
+
+  // Render loading state after all hooks are registered
+  if (authLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-indigo-900 via-slate-900 to-black text-white flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-xl text-white/70">Loading dashboard...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If still no user after loading, render nothing
   if (!user) return null;
 
   return (
@@ -118,14 +180,6 @@ export default function DashboardClient() {
                 <User className="w-4 h-4" />
                 <span className="text-sm">{user.email?.split('@')[0]}</span>
               </div>
-              <Button
-                onClick={handleClearCache}
-                variant="secondary"
-                size="sm"
-                className="bg-white/10 hover:bg-white/20 border border-white/20"
-              >
-                Clear Local Cache
-              </Button>
               <Button
                 onClick={handleLogout}
                 variant="secondary"

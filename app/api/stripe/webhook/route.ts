@@ -1,11 +1,9 @@
-import { headers } from "next/headers";
-import { NextResponse } from "next/server";
 import Stripe from "stripe";
 import { db as adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-08-27.basil",  // Latest stable version
+  apiVersion: "2024-06-20",  // Latest stable version
 });
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -28,6 +26,14 @@ async function updateSubscription(uid: string, data: {
   current_period_end?: Date | null;
   updatedAt: Date;
 }) {
+  console.log(`\n📝 Subscription Update`, {
+    uid,
+    plan: data.plan,
+    status: data.status,
+    isActive: data.status === "active",
+    isProUser: data.plan === "pro",
+    currentPeriodEnd: data.current_period_end,
+  });
   console.log(`🔄 Updating subscription for user ${uid}:`, data);
 
   // Write to user_subscriptions collection
@@ -37,45 +43,28 @@ async function updateSubscription(uid: string, data: {
     .set(data, { merge: true });
 
   // Mirror essential fields to users collection
-  await adminDb
-    .collection("users")
-    .doc(uid)
-    .set({
-      plan: data.plan,
-      status: data.status,
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
+    // Mirror essential fields to users collection with additional fields
+    await adminDb
+      .collection("users")
+      .doc(uid)
+      .set({
+        plan: data.plan,
+        status: data.status,
+        isActive: data.status === "active",
+        isProUser: data.plan === "pro",
+        stripeCustomerId: data.customerId,
+        current_period_end: data.current_period_end,
+        updatedAt: FieldValue.serverTimestamp(),
+      }, { merge: true });
 
   console.log(`✅ Successfully updated subscription status in both collections`);
 }
 
-export async function POST(req: Request) {
-  const body = await req.text();
-  const signature = headers().get("stripe-signature");
+// Handle events asynchronously
+async function handleEvent(event: Stripe.Event) {
+  logWebhookEvent(event);
 
-  if (!signature) {
-    return NextResponse.json(
-      { error: "No signature provided" },
-      { status: 400 }
-    );
-  }
-
-  let event: Stripe.Event;
-
-  try {
-    console.log('🔐 Attempting signature verification...');
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    console.log('✅ Signature verified!');
-  } catch (err) {
-    console.error("❌ Webhook signature verification failed:", err);
-    return NextResponse.json(
-      { error: `Webhook Error: ${err instanceof Error ? err.message : "Unknown error"}` },
-      { status: 400 }
-    );
-  }
-
-  try {
-    switch (event.type) {
+  switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         const customerId = session.customer as string;
@@ -199,12 +188,38 @@ export async function POST(req: Request) {
         console.log(`⚠️ Unhandled event type: ${event.type}`);
     }
 
-    return NextResponse.json({ received: true }, { status: 200 });
   } catch (err) {
     console.error("🔥 Error handling Stripe webhook:", err);
-    return NextResponse.json(
-      { error: "Webhook handler failed" },
-      { status: 500 }
-    );
+    throw err; // Re-throw to be caught by the outer handler
   }
+}
+
+// Main webhook endpoint handler
+export async function POST(req: Request) {
+  const body = await req.text();
+  const signature = req.headers.get("stripe-signature");
+
+  if (!signature) {
+    return new Response("Missing stripe-signature", { status: 400 });
+  }
+
+  let event: Stripe.Event;
+  try {
+    console.log('🔐 Attempting signature verification...');
+    event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    console.log('✅ Signature verified!');
+  } catch (err: any) {
+    console.error("❌ Webhook signature verification failed:", err);
+    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
+  }
+
+  // ✅ Acknowledge webhook immediately
+  const response = new Response("ok", { status: 200 });
+
+  // 🔄 Process the event asynchronously
+  handleEvent(event).catch(err => {
+    console.error("🔥 Error in async webhook handler:", err);
+  });
+
+  return response;
 }

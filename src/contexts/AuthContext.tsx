@@ -4,13 +4,13 @@ import { createContext, useContext, useEffect, useState } from "react";
 import {
   User,
   UserCredential,
-  onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut,
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth";
+import { useAuthState } from "react-firebase-hooks/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
@@ -30,56 +30,58 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  console.log('🔄 AuthProvider render');
+  const [user, loading, error] = useAuthState(auth);
+  const [initialized, setInitialized] = useState(false);
+  const [authError, setAuthError] = useState<Error | null>(null);
 
   useEffect(() => {
-    console.log('🔥 AuthProvider: Setting up auth state listener');
-    
-    try {
-      const unsubscribe = onAuthStateChanged(auth, async (user) => {
-        console.log('🔥 Auth state changed:', user ? 'User logged in' : 'No user');
-        setUser(user);
-        
-        // Ensure usage record exists for all authenticated users
-        if (user) {
-          const usageRef = doc(db, 'usage', user.uid);
-          try {
-            const usageSnap = await getDoc(usageRef);
-            
-            if (!usageSnap.exists()) {
-              // Create usage record if it doesn't exist (for existing users)
-              await setDoc(usageRef, {
-                audits_used: 0,
-                audit_limit: 5,
-                plan: 'free',
-                created_at: new Date().toISOString(),
-                last_reset: new Date().toISOString()
-              });
-              console.log('✅ Created missing usage record for user:', user.uid);
-            }
-          } catch (error) {
-            console.error('Error checking/creating usage record:', error);
-            // Don't block auth flow for usage record errors
-          }
+    const initAuth = async () => {
+      try {
+        // Wait for auth to initialize
+        if (!loading) {
+          console.log('✅ Firebase auth initialized', { user: !!user, loading });
+          setInitialized(true);
         }
-        
-        setLoading(false);
-        setError(null);
-      }, (error) => {
-        console.error('🔥 Auth state error:', error);
-        setError(error.message);
-        setLoading(false);
-      });
+      } catch (err) {
+        console.error('❌ Auth initialization error:', err);
+        setAuthError(err as Error);
+      }
+    };
 
-      return unsubscribe;
-    } catch (error) {
-      console.error('🔥 Failed to setup auth listener:', error);
-      setError('Failed to initialize authentication');
-      setLoading(false);
-    }
-  }, []);
+    initAuth();
+  }, [loading, user]);
+
+  // Ensure usage record exists for authenticated users
+  useEffect(() => {
+    if (!user) return;
+
+    const setupUsageRecord = async () => {
+      const usageRef = doc(db, 'usage', user.uid);
+      try {
+        const usageSnap = await getDoc(usageRef);
+        
+        if (!usageSnap.exists()) {
+          // Create usage record if it doesn't exist
+          await setDoc(usageRef, {
+            audits_used: 0,
+            audit_limit: 5,
+            plan: 'free',
+            created_at: new Date().toISOString(),
+            last_reset: new Date().toISOString()
+          });
+          console.log('✅ Created missing usage record for user:', user.uid);
+        }
+      } catch (error) {
+        console.error('Error checking/creating usage record:', error);
+        // Don't block auth flow for usage record errors
+      }
+    };
+
+    setupUsageRecord();
+  }, [user]);
+
+  // No longer render loading state here - let components handle their own loading states
 
   const signIn = async (email: string, password: string) => {
     try {
@@ -186,6 +188,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signInWithGoogle,
     logout,
   };
+
+  // Show error if auth failed to initialize
+  if (authError) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
+        <div className="text-center">
+          <p className="text-red-400 mb-2">❌ Authentication Error</p>
+          <p className="text-sm text-gray-400">{authError.message}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show nothing until Firebase auth is initialized
+  if (!initialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
+        <div className="text-center">
+          <div className="w-16 h-16 border-t-2 border-b-2 border-indigo-500 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-400">Initializing...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AuthContext.Provider value={value}>

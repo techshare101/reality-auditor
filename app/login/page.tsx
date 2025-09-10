@@ -83,31 +83,51 @@ const ParticlesBackground = () => {
 };
 
 export default function LoginPage() {
-  const [mounted, setMounted] = useState(false);
-
-  // Ensure hydration is complete before rendering form
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // States for form management
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
-  const { signIn, signUp, signInWithGoogle, user } = useAuth();
+  console.log('🔄 Login page render');
+  const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
   const router = useRouter();
+
+  // Debug log auth state
+  useEffect(() => {
+    console.log('👤 Auth state:', { user: !!user, authLoading });
+  }, [user, authLoading]);
   
   // Redirect if already logged in
   useEffect(() => {
-    if (user) {
-      router.push("/dashboard");
+    if (!authLoading && user) {
+      router.replace("/dashboard");
     }
-  }, [user, router]);
+  }, [user, authLoading, router]);
+
+  // Show loading state while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
+        <div className="w-full max-w-md bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl rounded-3xl p-8 relative">
+          <div className="flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // If user is already logged in, don't show the login form
+  if (user) {
+    return null;
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
 
+    console.log('📝 Form submit:', { email });
     setError("");
     setLoading(true);
 
@@ -167,8 +187,8 @@ export default function LoginPage() {
     }
   };
 
-  // Return a loading state or simplified version during server-side rendering
-  if (!mounted) {
+  // Show loading state while checking auth
+  if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-black to-gray-950 text-white px-6">
         <div className="w-full max-w-md bg-white/5 border border-white/10 backdrop-blur-xl shadow-2xl rounded-3xl p-8 relative">
