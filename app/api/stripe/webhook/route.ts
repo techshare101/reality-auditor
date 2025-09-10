@@ -96,8 +96,8 @@ async function handleEvent(event: Stripe.Event) {
           status: subscription.status,
           subscriptionId: subscription.id,
           customerId: customerId,
-          current_period_end: subscription.current_period_end_at
-            ? new Date(subscription.current_period_end_at * 1000)
+          current_period_end: subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
             : null,
           updatedAt: new Date(),
         });
@@ -126,8 +126,8 @@ async function handleEvent(event: Stripe.Event) {
           status: "cancelled",
           subscriptionId: subscription.id,
           customerId: customerId,
-          current_period_end: subscription.cancel_at
-            ? new Date(subscription.cancel_at * 1000)
+          current_period_end: subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000)
             : null,
           updatedAt: new Date(),
         });
@@ -156,8 +156,8 @@ async function handleEvent(event: Stripe.Event) {
           status: "past_due",
           subscriptionId: invoice.subscription as string,
           customerId,
-          current_period_end: invoice.due_date
-            ? new Date(invoice.due_date * 1000)
+          current_period_end: invoice.period_end
+            ? new Date(invoice.period_end * 1000)
             : null,
           updatedAt: new Date(),
         });
