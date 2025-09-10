@@ -17,7 +17,7 @@ import { doc, setDoc, getDoc } from "firebase/firestore";
 type AuthContextType = {
   user: User | null;
   loading: boolean;
-  error: Error | null | undefined;
+  error: Error | null;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<UserCredential>;
@@ -33,12 +33,19 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, loading, error] = useAuthState(auth);
+  // Handle undefined values from useAuthState
+  const [authUser, loading, authError] = useAuthState(auth);
   const [initialized, setInitialized] = useState(false);
+  
+  // Ensure user is either User | null (never undefined)
+  const user = authUser === undefined ? null : authUser;
+  // Convert error to Error | null (never undefined)
+  const error = authError || null;
 
+  // Mark as initialized when auth state is determined
   useEffect(() => {
-    if (!loading) setInitialized(true);
-  }, [loading]);
+    if (!loading && user !== undefined) setInitialized(true);
+  }, [loading, user]);
 
   // Ensure usage record exists for authenticated users
   useEffect(() => {
@@ -156,7 +163,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     console.log('🧽 Cleared local storage on logout');
   };
 
-  const value = {
+  const value: AuthContextType = {
     user,
     loading: !initialized || loading,
     error,
