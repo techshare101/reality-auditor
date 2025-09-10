@@ -3,7 +3,7 @@ import { db as adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",  // Latest stable version
+  apiVersion: "2025-08-27.basil" as const,  // Latest version
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
