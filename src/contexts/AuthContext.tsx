@@ -10,7 +10,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth";
-import { useAuthState } from "react-firebase-hooks/auth";
+import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth, db } from "@/lib/firebase";
 import { doc, setDoc, getDoc } from "firebase/firestore";
 
@@ -30,7 +30,25 @@ export function useAuth() {
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  console.log('🔄 AuthProvider render');
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<Error | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth,
+      (user) => {
+        setUser(user);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Auth state error:', error);
+        setError(error);
+        setLoading(false);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
   const [user, loading, error] = useAuthState(auth);
   const [initialized, setInitialized] = useState(false);
   const [authError, setAuthError] = useState<Error | null>(null);
