@@ -18,8 +18,6 @@ export function useAuditAccess(auditsCount: number = 0) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let mounted = true;
-
     if (!user?.uid) {
       setSubscription(null);
       setLoading(false);
@@ -37,81 +35,57 @@ export function useAuditAccess(auditsCount: number = 0) {
       setLoading(false);
     }
 
-    // Watch both subscription docs in Firestore
-    const userSubRef = doc(db, "user_subscriptions", user.uid);
     const userRef = doc(db, "users", user.uid);
     
-    const unsubscribeUserSub = onSnapshot(
-      userSubRef,
-      { includeMetadataChanges: true },
-      (snap) => {
-        if (!mounted) return;
-
-        if (snap.exists()) {
-          const data = snap.data();
-          const currentPeriodEnd = data.current_period_end?.toDate?.() || null;
-          const isActive = !!currentPeriodEnd && currentPeriodEnd > new Date();
-          
-          // Clear optimistic flag if we have real data
-          if (hasJustPaid) {
-            localStorage.removeItem("justPaid");
-          }
-
-          setSubscription({
-            plan: data.plan || "free",
-            status: isActive ? "active" : "inactive",
-            currentPeriodEnd: currentPeriodEnd,
-            isActive,
-          });
-          setLoading(false);
-        } else {
-          // If user_subscriptions doesn't exist, check users collection
-          const unsubscribeUser = onSnapshot(
-            userRef,
-            { includeMetadataChanges: true },
-            (userSnap) => {
-              if (!mounted) return;
-
-              if (userSnap.exists()) {
-                const userData = userSnap.data();
-                setSubscription({
-                  plan: userData.plan || "free",
-                  status: userData.status || "inactive",
-                  isActive: userData.status === "active",
-                });
-              } else {
-                setSubscription({
-                  plan: "free",
-                  status: "inactive",
-                  isActive: false,
-                });
-              }
-              setLoading(false);
+    const unsub = onSnapshot(
+      userRef,
+      {
+        next: (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = docSnap.data();
+            const currentPeriodEnd = userData.current_period_end?.toDate?.() || null;
+            
+            // Clear optimistic flag if we have real data
+            if (hasJustPaid) {
+              localStorage.removeItem("justPaid");
             }
-          );
-          
-          return () => unsubscribeUser();
-        }
-      }
-      },
-      (error) => {
-        console.error("Error listening to subscription:", error);
-        // Keep optimistic state if there's an error and we just paid
-        if (!hasJustPaid) {
-          setSubscription({
-            plan: "free",
-            status: "inactive",
-            isActive: false,
-          });
-        }
-        setLoading(false);
+
+            // Determine active status using multiple indicators
+            const isActive = userData.isActive || 
+              userData.isProUser || 
+              (userData.status === "active") || 
+              (!!currentPeriodEnd && currentPeriodEnd > new Date());
+
+            setSubscription({
+              plan: userData.plan || "free",
+              status: isActive ? "active" : "inactive",
+              currentPeriodEnd,
+              isActive,
+            });
+          } else {
+            setSubscription({
+              plan: "free",
+              status: "inactive",
+              isActive: false,
+            });
+          }
+          setLoading(false);
+        },
+        error: (error) => {
+          console.error("Error listening to subscription:", error);
+          if (!hasJustPaid) {
+            setSubscription({
+              plan: "free",
+              status: "inactive",
+              isActive: false,
+            });
+          }
+          setLoading(false);
+        },
       }
     );
 
-    return () => {
-      mounted = false;
-      unsubscribeUserSub();
-    };
+    return () => unsub();
   }, [user?.uid]);
 
   // Compute audit access status
