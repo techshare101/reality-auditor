@@ -77,8 +77,8 @@ async function handleEvent(event: Stripe.Event) {
 
     case "customer.subscription.updated":
     case "customer.subscription.created": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId = subscription.customer as string;
+const subscription = event.data.object;
+      const customerId = (subscription as any).customer as string;
 
       console.log('✅ Subscription updated:', subscription.id);
 
@@ -92,12 +92,12 @@ async function handleEvent(event: Stripe.Event) {
         const userId = userSnapshot.docs[0].id;
         
         await updateSubscription(userId, {
-          plan: subscription.status === "active" ? "pro" : "free",
-          status: subscription.status,
-          subscriptionId: subscription.id,
+          plan: (subscription as any).status === "active" ? "pro" : "free",
+          status: (subscription as any).status,
+          subscriptionId: (subscription as any).id,
           customerId: customerId,
-          current_period_end: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000)
+          current_period_end: (subscription as any).current_period_end
+            ? new Date((subscription as any).current_period_end * 1000)
             : null,
           updatedAt: new Date(),
         });
@@ -107,10 +107,10 @@ async function handleEvent(event: Stripe.Event) {
     }
 
     case "customer.subscription.deleted": {
-      const subscription = event.data.object as Stripe.Subscription;
-      const customerId = subscription.customer as string;
+      const subscription = event.data.object;
+      const customerId = (subscription as any).customer as string;
 
-      console.log('❌ Subscription deleted:', subscription.id);
+      console.log('❌ Subscription deleted:', (subscription as any).id);
 
       const userSnapshot = await adminDb
         .collection("users")
@@ -124,10 +124,10 @@ async function handleEvent(event: Stripe.Event) {
         await updateSubscription(userId, {
           plan: "free",
           status: "cancelled",
-          subscriptionId: subscription.id,
+          subscriptionId: (subscription as any).id,
           customerId: customerId,
-          current_period_end: subscription.current_period_end
-            ? new Date(subscription.current_period_end * 1000)
+          current_period_end: (subscription as any).current_period_end
+            ? new Date((subscription as any).current_period_end * 1000)
             : null,
           updatedAt: new Date(),
         });
@@ -137,8 +137,8 @@ async function handleEvent(event: Stripe.Event) {
     }
 
     case "invoice.payment_failed": {
-      const invoice = event.data.object as Stripe.Invoice;
-      const customerId = invoice.customer as string;
+      const invoice = event.data.object;
+      const customerId = (invoice as any).customer as string;
       
       console.log('❌ Payment failed for customer:', customerId);
       
@@ -154,10 +154,10 @@ async function handleEvent(event: Stripe.Event) {
         await updateSubscription(userId, {
           plan: "pro", // still pro, but payment failed
           status: "past_due",
-          subscriptionId: invoice.subscription as string,
+          subscriptionId: (invoice as any).subscription as string,
           customerId,
-          current_period_end: invoice.period_end
-            ? new Date(invoice.period_end * 1000)
+          current_period_end: (invoice as any).period_end
+            ? new Date((invoice as any).period_end * 1000)
             : null,
           updatedAt: new Date(),
         });
