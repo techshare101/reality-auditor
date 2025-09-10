@@ -26,6 +26,7 @@ export function useSubscriptionWithAudits() {
   // Listen to auth state
   useEffect(() => {
     const unsubAuth = onAuthStateChanged(auth, (firebaseUser) => {
+      console.log('🔄 Auth state changed:', firebaseUser?.uid);
       setUser(firebaseUser);
       if (!firebaseUser) {
         setAuditStats({
@@ -66,11 +67,14 @@ export function useSubscriptionWithAudits() {
         const now = new Date();
         const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
         
+        // Build query with user.uid (guaranteed to exist here)
         const auditsQuery = query(
           collection(db, 'audits'),
-          where('userId', '==', currentUser.uid),
+          where('userId', '==', user.uid),
           where('createdAt', '>=', Timestamp.fromDate(monthStart))
         );
+        
+        console.log('📊 Running audit query for user:', user.uid);
         
         const snapshot = await getDocs(auditsQuery);
         const count = snapshot.size;
@@ -112,6 +116,7 @@ export function useSubscriptionWithAudits() {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     
+    // Build query with user.uid (we checked it exists above)
     const auditsQuery = query(
       collection(db, 'audits'),
       where('userId', '==', user.uid),
