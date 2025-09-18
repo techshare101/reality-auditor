@@ -13,17 +13,20 @@ export const metadata: Metadata = {
   description: "AI-powered media bias detection and truth verification. Analyze articles, transcripts, and content for bias patterns, manipulation tactics, and missing perspectives.",
   icons: {
     icon: [
-      { url: "/favicon-16x16.png", type: "image/png", sizes: "16x16" },
-      { url: "/favicon-32x32.png", type: "image/png", sizes: "32x32" },
-      { url: "/favicon.svg", type: "image/svg+xml" }
+      { url: "/favicon-96x96.png", type: "image/png", sizes: "96x96" },
+      { url: "/favicon.svg", type: "image/svg+xml" },
+      { url: "/favicon.ico", rel: "shortcut icon" }
     ],
     apple: "/apple-touch-icon.png",
   },
   manifest: "/site.webmanifest",
+  appleWebApp: {
+    title: "Reality Auditor",
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#0f172a",
+  themeColor: "#6C4BFF",
 };
 
 export default function RootLayout({
@@ -32,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <head>
         <meta name="format-detection" content="telephone=no, date=no, email=no, address=no" />
       </head>
