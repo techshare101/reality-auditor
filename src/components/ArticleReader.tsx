@@ -36,6 +36,7 @@ export default function ArticleReader({ text, className = "" }: ArticleReaderPro
     // If already playing, stop
     if (isPlaying && audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = "";
       setIsPlaying(false);
       return;
     }
@@ -47,7 +48,7 @@ export default function ArticleReader({ text, className = "" }: ArticleReaderPro
       // Get auth token
       const token = await user.getIdToken();
 
-      // Call TTS API
+      // Start streaming TTS API call
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: {
@@ -62,33 +63,107 @@ export default function ArticleReader({ text, className = "" }: ArticleReaderPro
         throw new Error(errorData.error || "Failed to generate speech");
       }
 
-      // Create audio URL from response
-      const blob = await response.blob();
-      const audioUrl = URL.createObjectURL(blob);
+      // Get the response body as a stream
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("Stream not available");
+      }
 
-      // Create and play audio
-      const audio = new Audio(audioUrl);
-      audioRef.current = audio;
+      // Collect chunks for progressive playback
+      const chunks: Uint8Array[] = [];
+      let receivedLength = 0;
+      let audioStarted = false;
+      let audioBlob: Blob | null = null;
+      let audioUrl: string | null = null;
 
-      // Set up event handlers
-      audio.onplay = () => setIsPlaying(true);
-      audio.onended = () => {
-        setIsPlaying(false);
-        URL.revokeObjectURL(audioUrl); // Clean up
-      };
-      audio.onerror = () => {
-        setError("Failed to play audio");
-        setIsPlaying(false);
-        URL.revokeObjectURL(audioUrl);
-      };
+      // Read stream chunks
+      while (true) {
+        const { done, value } = await reader.read();
+        
+        if (done) break;
+        
+        if (value) {
+          chunks.push(value);
+          receivedLength += value.length;
+          
+          // Start playing after receiving initial chunks (around 16KB)
+          if (!audioStarted && receivedLength > 16384) {
+            // Create initial blob from collected chunks
+            const initialChunks = new Uint8Array(receivedLength);
+            let position = 0;
+            for (const chunk of chunks) {
+              initialChunks.set(chunk, position);
+              position += chunk.length;
+            }
+            
+            audioBlob = new Blob([initialChunks], { type: 'audio/mpeg' });
+            audioUrl = URL.createObjectURL(audioBlob);
+            
+            // Create and configure audio element
+            const audio = new Audio(audioUrl);
+            audioRef.current = audio;
+            
+            // Set up event handlers
+            audio.onloadeddata = () => {
+              setIsLoading(false);
+              audio.play().catch(e => {
+                console.error("Playback error:", e);
+                setError("Failed to start playback");
+              });
+            };
+            
+            audio.onplay = () => setIsPlaying(true);
+            
+            audio.onended = () => {
+              setIsPlaying(false);
+              if (audioUrl) URL.revokeObjectURL(audioUrl);
+            };
+            
+            audio.onerror = () => {
+              setError("Audio playback error");
+              setIsPlaying(false);
+              if (audioUrl) URL.revokeObjectURL(audioUrl);
+            };
+            
+            audioStarted = true;
+          }
+        }
+      }
 
-      // Play the audio
-      await audio.play();
+      // If we haven't started playing yet (small audio), create final blob
+      if (!audioStarted && chunks.length > 0) {
+        const fullAudio = new Uint8Array(receivedLength);
+        let position = 0;
+        for (const chunk of chunks) {
+          fullAudio.set(chunk, position);
+          position += chunk.length;
+        }
+        
+        audioBlob = new Blob([fullAudio], { type: 'audio/mpeg' });
+        audioUrl = URL.createObjectURL(audioBlob);
+        
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        
+        audio.onplay = () => setIsPlaying(true);
+        audio.onended = () => {
+          setIsPlaying(false);
+          URL.revokeObjectURL(audioUrl!);
+        };
+        audio.onerror = () => {
+          setError("Failed to play audio");
+          setIsPlaying(false);
+          URL.revokeObjectURL(audioUrl!);
+        };
+        
+        await audio.play();
+        setIsLoading(false);
+      }
+
     } catch (err: any) {
-      console.error("TTS error:", err);
+      console.error("TTS streaming error:", err);
       setError(err.message || "Failed to read aloud");
       setIsPlaying(false);
-    } finally {
       setIsLoading(false);
     }
   };

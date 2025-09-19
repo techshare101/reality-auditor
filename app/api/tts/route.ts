@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     
     console.log(`🔊 Generating TTS for ${truncatedText.length} characters`);
 
-    // Generate speech using OpenAI TTS
+    // Generate speech using OpenAI TTS with streaming
     const response = await openai.audio.speech.create({
       model: "tts-1", // Use "tts-1-hd" for higher quality but slower
       voice: "nova", // Female voice options: "nova", "alloy", "shimmer"
@@ -50,17 +50,30 @@ export async function POST(req: NextRequest) {
       speed: 1.0, // Speed range: 0.25 to 4.0
     });
 
-    // Convert response to buffer
-    const audioBuffer = Buffer.from(await response.arrayBuffer());
-    
-    console.log(`✅ TTS generated successfully, size: ${audioBuffer.length} bytes`);
+    console.log(`✅ TTS stream started`);
 
-    // Return audio file
-    return new Response(audioBuffer, {
+    // Get the response body as a readable stream
+    const stream = response.body;
+    if (!stream) {
+      throw new Error("No response stream available");
+    }
+
+    // Create a TransformStream to pass through the audio data
+    const { readable, writable } = new TransformStream();
+    
+    // Pipe the OpenAI stream to our transform stream
+    stream.pipeTo(writable).catch(err => {
+      console.error("Stream error:", err);
+    });
+
+    // Return streaming response
+    return new Response(readable, {
       headers: {
         "Content-Type": "audio/mpeg",
-        "Content-Length": audioBuffer.length.toString(),
-        "Cache-Control": "public, max-age=3600", // Cache for 1 hour
+        "Transfer-Encoding": "chunked",
+        "Cache-Control": "no-cache", // Don't cache streaming responses
+        "X-Content-Type-Options": "nosniff",
+        "X-Accel-Buffering": "no", // Disable proxy buffering
       },
     });
   } catch (err: any) {
