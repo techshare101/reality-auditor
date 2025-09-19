@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { FileText, X, Eye, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DemoInviteModal } from "@/components/DemoInviteModal";
+import ArticleReader from "@/components/ArticleReader";
 
 interface ArticleContentCardProps {
   content: string;
@@ -47,17 +48,20 @@ export default function ArticleContentCard({
             </h3>
           </div>
           
-          {/* Preview Button */}
+          {/* Preview and Read Out Loud Buttons */}
           {content && (
-            <motion.button
-              onClick={() => setShowPreviewModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-purple-500/20 to-indigo-600/20 hover:from-purple-500/30 hover:to-indigo-600/30 border border-purple-500/30 text-purple-200 rounded-lg transition-all duration-200"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-            >
-              <Eye className="w-4 h-4" />
-              Preview
-            </motion.button>
+            <div className="flex items-center gap-2">
+              <motion.button
+                onClick={() => setShowPreviewModal(true)}
+                className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-purple-500/20 to-indigo-600/20 hover:from-purple-500/30 hover:to-indigo-600/30 border border-purple-500/30 text-purple-200 rounded-lg transition-all duration-200"
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <Eye className="w-4 h-4" />
+                Preview
+              </motion.button>
+              <ArticleReader text={content} />
+            </div>
           )}
         </div>
 
