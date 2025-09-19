@@ -11,6 +11,7 @@ export interface ClaimResult {
   evidence?: string;
   citation?: string; // URL to external source
   footnote?: number; // for summary footnote refs (1-based)
+  status?: "verified" | "unverified" | "partial"; // Track verification status
 }
 
 export interface AuditResult {
@@ -59,12 +60,14 @@ export function calculateTruthScore(verdicts: Verdict[]): number {
 }
 
 /**
- * Confidence Formula:
- * confidence = (coverage × 0.7 + citations × 0.3) × 100
+ * Dynamic Confidence Formula:
+ * Calculates confidence based on claim verification status
  * 
- * Where:
- * - coverage = verified claims / total claims
- * - citations = cited claims / total claims
+ * - verified claims: full weight (1.0)
+ * - partial claims: half weight (0.5)
+ * - unverified claims: no weight (0.0)
+ * 
+ * Scale between 40% and 95%
  */
 export function calculateConfidence(
   totalClaims: number, 
@@ -80,6 +83,38 @@ export function calculateConfidence(
   
   // Ensure confidence is between 0-100
   return Math.max(0, Math.min(100, Math.round(confidence)));
+}
+
+/**
+ * Enhanced confidence calculation based on claim status
+ * Uses verification status for more nuanced confidence scoring
+ */
+export function calculateDynamicConfidence(claims: ClaimResult[]): number {
+  if (!claims || claims.length === 0) {
+    return 50; // no evidence = low confidence baseline
+  }
+
+  // Count claims by status
+  const verified = claims.filter(c => 
+    c.status === "verified" || 
+    (c.verdict === "true" && c.citation) // fallback for backward compatibility
+  ).length;
+  
+  const partial = claims.filter(c => 
+    c.status === "partial" || 
+    (c.verdict === "misleading") // fallback for backward compatibility
+  ).length;
+  
+  const unverified = claims.filter(c => 
+    c.status === "unverified" || 
+    (!c.status && c.verdict === "unverified") // fallback for backward compatibility
+  ).length;
+
+  const total = claims.length;
+  const ratio = (verified + 0.5 * partial) / total;
+
+  // Scale confidence between 40% and 95%
+  return Math.round(40 + ratio * 55);
 }
 
 /**
@@ -108,12 +143,23 @@ export function processFactCheckResults(
     // Try to find a citation for this claim
     const citation = citations[index] || undefined;
     
+    // Determine verification status based on verdict and citation
+    let status: "verified" | "unverified" | "partial" | undefined;
+    if (citation && (normalizedVerdict === "true" || normalizedVerdict === "false")) {
+      status = "verified";
+    } else if (normalizedVerdict === "misleading" || (citation && normalizedVerdict === "unverified")) {
+      status = "partial";
+    } else {
+      status = "unverified";
+    }
+    
     return {
       verdict: normalizedVerdict,
       claim: result.claim,
       evidence: result.evidence,
       citation,
-      footnote: citation ? index + 1 : undefined
+      footnote: citation ? index + 1 : undefined,
+      status
     };
   });
 
@@ -125,7 +171,8 @@ export function processFactCheckResults(
   const verifiedClaims = claimResults.filter(c => c.verdict !== "unverified").length;
   const citedClaims = claimResults.filter(c => c.citation).length;
   
-  const confidence = calculateConfidence(totalClaims, verifiedClaims, citedClaims);
+  // Use dynamic confidence calculation
+  const confidence = calculateDynamicConfidence(claimResults);
 
   return {
     claimResults,
@@ -236,4 +283,51 @@ export function formatCitationDisplay(url: string): string {
     // If URL parsing fails, return a shortened version
     return url.length > 30 ? url.substring(0, 30) + '...' : url;
   }
+}
+
+/**
+ * Get confidence level color and styling based on percentage
+ * Returns Tailwind CSS classes and emoji for confidence display
+ */
+export function getConfidenceStyle(confidence: number): {
+  color: string;
+  bgColor: string;
+  borderColor: string;
+  icon: string;
+  label: string;
+} {
+  if (confidence >= 80) {
+    return {
+      color: 'text-green-600 dark:text-green-400',
+      bgColor: 'bg-green-100 dark:bg-green-900/30',
+      borderColor: 'border-green-500',
+      icon: '🟢',
+      label: 'High Confidence'
+    };
+  } else if (confidence >= 60) {
+    return {
+      color: 'text-yellow-600 dark:text-yellow-400',
+      bgColor: 'bg-yellow-100 dark:bg-yellow-900/30',
+      borderColor: 'border-yellow-500',
+      icon: '🟡',
+      label: 'Medium Confidence'
+    };
+  } else {
+    return {
+      color: 'text-red-600 dark:text-red-400',
+      bgColor: 'bg-red-100 dark:bg-red-900/30',
+      borderColor: 'border-red-500',
+      icon: '🔴',
+      label: 'Low Confidence'
+    };
+  }
+}
+
+/**
+ * Get a simple confidence badge for inline display
+ */
+export function getConfidenceBadge(confidence: number): string {
+  if (confidence >= 80) return '🟢 High';
+  else if (confidence >= 60) return '🟡 Medium';
+  else return '🔴 Low';
 }

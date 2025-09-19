@@ -1,9 +1,12 @@
 import { 
   calculateTruthScore, 
   calculateConfidence, 
+  calculateDynamicConfidence,
   processFactCheckResults,
   Verdict,
-  ClaimResult as AuditClaimResult 
+  ClaimResult as AuditClaimResult,
+  getConfidenceStyle,
+  getConfidenceBadge
 } from '@/utils/auditScoring';
 
 export type ClaimVerdict = "true" | "false" | "unverified" | "misleading";
@@ -248,35 +251,50 @@ export function buildTransparencyReport(data: AuditData): string[] {
 
 // calculateTruthScore is now imported from @/utils/auditScoring
 
-// calculateConfidence is now imported from @/utils/auditScoring
-// This function uses the imported calculateConfidence with proper types
+// Enhanced confidence calculation using dynamic claim status
 export function calculateConfidenceLevel(data: AuditData): number {
-  const totalClaims = data.fact_check_results?.length || 0;
-  if (totalClaims === 0) return 50; // Default 50% if no claims checked
+  const factCheckResults = data.fact_check_results;
+  if (!factCheckResults || factCheckResults.length === 0) return 50;
   
-  // Count claims with any verdict (not just counting by type)
-  const verifiedClaims = data.fact_check_results?.filter(
-    fc => fc.verdict && fc.verdict.length > 0
-  ).length || 0;
+  // Convert fact check results to ClaimResult format for dynamic calculation
+  const claimResults: AuditClaimResult[] = factCheckResults.map((fc, index) => {
+    // Determine verification status based on verdict and evidence
+    let status: "verified" | "unverified" | "partial";
+    const hasExternalSource = fc.evidence && 
+      (fc.evidence.includes('http') || fc.evidence.includes('www'));
+    
+    if (hasExternalSource && (fc.verdict === "true" || fc.verdict === "false")) {
+      status = "verified";
+    } else if (fc.verdict === "misleading" || (hasExternalSource && fc.verdict === "unverified")) {
+      status = "partial";
+    } else {
+      status = "unverified";
+    }
+    
+    return {
+      verdict: fc.verdict as Verdict,
+      claim: fc.claim,
+      evidence: fc.evidence,
+      citation: data.citations?.[index],
+      status
+    };
+  });
   
-  // Count claims with external citations in evidence
-  const citedClaims = data.fact_check_results?.filter(
-    fc => fc.evidence && (fc.evidence.includes('http') || fc.evidence.includes('www'))
-  ).length || 0;
-  
-  // Use the imported calculateConfidence function with correct parameters
-  return calculateConfidence(totalClaims, verifiedClaims, citedClaims);
+  // Use the dynamic confidence calculation
+  return calculateDynamicConfidence(claimResults);
 }
 
 /**
  * Get confidence level label based on percentage
  */
 export function getConfidenceLabel(confidence: number): { label: string; icon: string; color: string } {
-  if (confidence >= 90) {
-    return { label: 'High', icon: '✅', color: 'text-green-300' };
-  } else if (confidence >= 60) {
-    return { label: 'Medium', icon: '⚠️', color: 'text-yellow-300' };
-  } else {
-    return { label: 'Low', icon: '❓', color: 'text-orange-300' };
-  }
+  const style = getConfidenceStyle(confidence);
+  return { 
+    label: style.label.replace(' Confidence', ''), 
+    icon: style.icon, 
+    color: style.color 
+  };
 }
+
+// Re-export the new helper functions for convenience
+export { getConfidenceStyle, getConfidenceBadge } from '@/utils/auditScoring';
