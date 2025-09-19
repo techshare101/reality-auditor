@@ -48,7 +48,7 @@ export default function ArticleReader({ text, className = "" }: ArticleReaderPro
       // Get auth token
       const token = await user.getIdToken();
 
-      // Start streaming TTS API call
+      // Call TTS API
       const response = await fetch("/api/tts", {
         method: "POST",
         headers: {
@@ -63,105 +63,48 @@ export default function ArticleReader({ text, className = "" }: ArticleReaderPro
         throw new Error(errorData.error || "Failed to generate speech");
       }
 
-      // Get the response body as a stream
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error("Stream not available");
-      }
+      // For now, let's use the simpler blob approach that works
+      const blob = await response.blob();
+      const audioUrl = URL.createObjectURL(blob);
 
-      // Collect chunks for progressive playback
-      const chunks: Uint8Array[] = [];
-      let receivedLength = 0;
-      let audioStarted = false;
-      let audioBlob: Blob | null = null;
-      let audioUrl: string | null = null;
+      // Create and play audio
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
 
-      // Read stream chunks
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) break;
-        
-        if (value) {
-          chunks.push(value);
-          receivedLength += value.length;
-          
-          // Start playing after receiving initial chunks (around 16KB)
-          if (!audioStarted && receivedLength > 16384) {
-            // Create initial blob from collected chunks
-            const initialChunks = new Uint8Array(receivedLength);
-            let position = 0;
-            for (const chunk of chunks) {
-              initialChunks.set(chunk, position);
-              position += chunk.length;
-            }
-            
-            audioBlob = new Blob([initialChunks], { type: 'audio/mpeg' });
-            audioUrl = URL.createObjectURL(audioBlob);
-            
-            // Create and configure audio element
-            const audio = new Audio(audioUrl);
-            audioRef.current = audio;
-            
-            // Set up event handlers
-            audio.onloadeddata = () => {
-              setIsLoading(false);
-              audio.play().catch(e => {
-                console.error("Playback error:", e);
-                setError("Failed to start playback");
-              });
-            };
-            
-            audio.onplay = () => setIsPlaying(true);
-            
-            audio.onended = () => {
-              setIsPlaying(false);
-              if (audioUrl) URL.revokeObjectURL(audioUrl);
-            };
-            
-            audio.onerror = () => {
-              setError("Audio playback error");
-              setIsPlaying(false);
-              if (audioUrl) URL.revokeObjectURL(audioUrl);
-            };
-            
-            audioStarted = true;
-          }
-        }
-      }
+      // Set up event handlers
+      audio.onloadstart = () => {
+        console.log("Audio loading started");
+      };
 
-      // If we haven't started playing yet (small audio), create final blob
-      if (!audioStarted && chunks.length > 0) {
-        const fullAudio = new Uint8Array(receivedLength);
-        let position = 0;
-        for (const chunk of chunks) {
-          fullAudio.set(chunk, position);
-          position += chunk.length;
-        }
-        
-        audioBlob = new Blob([fullAudio], { type: 'audio/mpeg' });
-        audioUrl = URL.createObjectURL(audioBlob);
-        
-        const audio = new Audio(audioUrl);
-        audioRef.current = audio;
-        
-        audio.onplay = () => setIsPlaying(true);
-        audio.onended = () => {
-          setIsPlaying(false);
-          URL.revokeObjectURL(audioUrl!);
-        };
-        audio.onerror = () => {
-          setError("Failed to play audio");
-          setIsPlaying(false);
-          URL.revokeObjectURL(audioUrl!);
-        };
-        
-        await audio.play();
+      audio.oncanplaythrough = () => {
+        console.log("Audio can play through");
         setIsLoading(false);
-      }
+      };
 
+      audio.onplay = () => {
+        console.log("Audio playing");
+        setIsPlaying(true);
+      };
+
+      audio.onended = () => {
+        console.log("Audio ended");
+        setIsPlaying(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = (e) => {
+        console.error("Audio error:", e);
+        setError("Failed to play audio");
+        setIsPlaying(false);
+        setIsLoading(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      // Play the audio
+      await audio.play();
+      
     } catch (err: any) {
-      console.error("TTS streaming error:", err);
+      console.error("TTS error:", err);
       setError(err.message || "Failed to read aloud");
       setIsPlaying(false);
       setIsLoading(false);
