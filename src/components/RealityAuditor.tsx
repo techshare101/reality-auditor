@@ -33,6 +33,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { AuditBadge } from "@/components/AuditBadge";
 
 import { RealityAudit, AuditRequest } from "@/lib/schemas";
 import CollapsibleText from "@/components/CollapsibleText";
@@ -40,6 +41,8 @@ import ArticleContentCard from "@/components/ArticleContentCard";
 import { useRecentAudits } from "@/hooks/useRecentAudits";
 import { useAuth } from "@/contexts/AuthContext";
 import { useHybridAuditLimit } from "@/hooks/useHybridAuditLimit";
+import { useAuditAccess } from "@/hooks/useAuditAccess";
+import { useUnifiedAuditAccess } from "@/hooks/useUnifiedAuditAccess";
 import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outlets";
 import { getWarningLevel, getDynamicWarnings } from '@/lib/warnings';
 import { 
@@ -167,7 +170,8 @@ function getTruthScoreGradient(score: number): string {
 
 export default function RealityAuditorApp({ initialData, demoMode }: { initialData?: any; demoMode?: boolean }) {
   const { user } = useAuth();
-  const { count: auditCount, isOverLimit, remaining, hasPaidPlan, increment: incrementUsage, loading: subscriptionLoading } = useHybridAuditLimit(5);
+  const { used, canAudit, showPaywall, loading: subscriptionLoading } = useUnifiedAuditAccess();
+  const { increment: incrementUsage } = useHybridAuditLimit(5);
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
   const [metadata, setMetadata] = useState({
@@ -187,10 +191,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [mounted, setMounted] = useState(false);
   
-  // GUARANTEED PRO EMAILS - Double check in UI
-  const GUARANTEED_PRO_EMAILS = ['valentin2v2000@gmail.com'];
-  const isGuaranteedPro = user?.email && GUARANTEED_PRO_EMAILS.includes(user.email.toLowerCase());
-  const isProUser = hasPaidPlan || isGuaranteedPro;
+  const isProUser = canAudit;
   
   // Ensure client-side only rendering for user-dependent content
   useEffect(() => {
@@ -296,11 +297,11 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   }, []);
 
   async function onAudit() {
-    // Skip limit checks in demo mode
-    if (!demoMode) {
-      // Check hard limit first
-      if (isOverLimit) {
-        console.log(`🚫 Audit limit reached: ${auditCount}/5`);
+    // Skip limit checks for demo mode and Pro users
+    if (!demoMode && !isProUser) {
+      // Check hard limit only for free users
+      if (showPaywall) {
+        console.log(`🚫 Audit limit reached - upgrade to Pro for unlimited audits`);
         setShowUpgradePrompt(true);
         return;
       }
@@ -389,7 +390,7 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
 
       // Backend now handles the audit count increment automatically
       console.log(`✅ Audit complete. Backend will update count automatically.`);
-      console.log(`📊 Current count: ${auditCount}/5 (will update via Firestore listener)`);
+      console.log(`📊 Current count: ${used}/5 (will update via Firestore listener)`);
       
       // If result shows successful non-cached audit, increment local counter for hybrid hook
       if (result.cache_status === 'miss' && user && !demoMode) {
@@ -540,85 +541,9 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
           </div>
         </motion.div>
 
-        {/* Audit Count Display */}
+        {/* Audit Count / Pro Banner */}
         <div className="flex justify-center mb-6" suppressHydrationWarning>
-          {/* Pro users banner */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ 
-              opacity: mounted && user && !subscriptionLoading && isProUser ? 1 : 0, 
-              scale: mounted && user && !subscriptionLoading && isProUser ? 1 : 0.9 
-            }}
-            transition={{ delay: 0.15, duration: 0.6 }}
-            style={{ 
-              display: mounted && user && !subscriptionLoading && isProUser ? 'block' : 'none' 
-            }}
-            className="relative overflow-hidden"
-          >
-            {/* Animated glow background */}
-            <div className="absolute inset-0 bg-gradient-to-r from-green-500/30 to-emerald-500/30 blur-xl animate-pulse" />
-            
-            {/* Main banner */}
-            <div className="relative inline-flex items-center gap-3 px-8 py-4 rounded-2xl bg-gradient-to-r from-green-900/50 to-emerald-900/50 border-2 border-green-500/50 backdrop-blur-xl shadow-2xl shadow-green-500/20">
-              <div className="relative">
-                <div className="absolute inset-0 bg-green-400 blur-lg animate-pulse" />
-                <CheckCircle className="relative w-6 h-6 text-green-400" />
-              </div>
-              <div className="text-center">
-                <div className="text-green-200 font-bold text-lg">
-                  ✨ Unlimited Audits Active
-                </div>
-                <div className="text-green-300/70 text-sm mt-0.5">
-                  Thank you for being a Pro member!
-                </div>
-              </div>
-              <div className="absolute top-1 right-2">
-                <span className="text-xs text-green-400/50">PRO</span>
-              </div>
-            </div>
-          </motion.div>
-          
-          {/* Free users progress bar */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ 
-              opacity: mounted && user && !subscriptionLoading && !isProUser ? 1 : 0, 
-              scale: mounted && user && !subscriptionLoading && !isProUser ? 1 : 0.9 
-            }}
-            transition={{ delay: 0.15, duration: 0.6 }}
-            style={{ 
-              display: mounted && user && !subscriptionLoading && !isProUser ? 'flex' : 'none' 
-            }}
-            className="inline-flex items-center gap-4 px-6 py-3 rounded-2xl bg-white/10 border border-white/20 backdrop-blur-xl"
-          >
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-amber-400" />
-              <span className="text-white/80 font-medium">
-                Free Audits Used: <span className="text-white font-bold">{auditCount}/5</span>
-              </span>
-            </div>
-            <div className="h-2 w-32 bg-white/20 rounded-full overflow-hidden">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(auditCount / 5) * 100}%` }}
-                transition={{ duration: 0.5, ease: "easeOut" }}
-                className={`h-full rounded-full ${
-                  auditCount >= 5 ? 'bg-red-500' : 
-                  auditCount >= 3 ? 'bg-amber-500' : 
-                  'bg-green-500'
-                }`}
-              />
-            </div>
-            {auditCount < 5 ? (
-              <span className="text-sm text-white/60">
-                {remaining} remaining this month
-              </span>
-            ) : (
-              <Badge className="bg-red-500/20 text-red-300 border-red-500/30">
-                Limit Reached
-              </Badge>
-            )}
-          </motion.div>
+          <AuditBadge />
         </div>
 
         {/* Input Panel */}

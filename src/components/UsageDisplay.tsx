@@ -11,9 +11,12 @@ import {
   CreditCard, 
   ArrowRight,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { AuditBadge } from "@/components/AuditBadge";
+import { useUnifiedAuditAccess } from "@/hooks/useUnifiedAuditAccess";
 
 export default function UsageDisplay() {
   const { user } = useAuth();
@@ -66,7 +69,16 @@ export default function UsageDisplay() {
     );
   }
   
-  const { usage, loading, error } = useUsageListener(user.uid);
+  const { isProUser, used, loading, error, plan, canAudit, showPaywall } = useUnifiedAuditAccess();
+
+  // Show Pro badge instead of usage for Pro users
+  if (isProUser) {
+    return (
+      <div className="mb-4">
+        <AuditBadge />
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -90,14 +102,12 @@ export default function UsageDisplay() {
     );
   }
 
-  if (!usage) {
-    return null;
-  }
-
-  const { audits_used, audit_limit, plan } = usage;
-  const remaining = Math.max(audit_limit - audits_used, 0);
-  const percentUsed = Math.min((audits_used / audit_limit) * 100, 100);
-  const isLimitReached = remaining === 0;
+  // Calculate derived values
+  const audit_limit = 5; // Free plan limit
+  const audits_used = used;
+  const remaining = Math.max(0, audit_limit - audits_used);
+  const percentUsed = Math.min(100, (audits_used / audit_limit) * 100);
+  const isLimitReached = showPaywall;
 
   // Color based on usage
   const getBarColor = () => {
@@ -117,11 +127,9 @@ export default function UsageDisplay() {
       >
         <div className="flex items-center justify-between mb-2">
           <h3 className="text-sm font-medium text-gray-300">Usage This Month</h3>
-          {plan && (
-            <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400 capitalize">
-              {plan} Plan
-            </span>
-          )}
+          <span className="text-xs px-2 py-1 rounded-full bg-gray-800 text-gray-400 capitalize">
+            {plan} Plan
+          </span>
         </div>
         
         <p className="text-xs text-gray-400 mb-3">

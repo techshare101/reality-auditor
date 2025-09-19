@@ -14,8 +14,21 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID!,
 };
 
+// Debug log Firebase config (without sensitive values)
+console.log('🔥 Initializing Firebase with config:', {
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+});
+
 // Prevent re-initialization on hot reload
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+let app;
+try {
+  app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+  console.log('✅ Firebase initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase initialization error:', error);
+  throw error;
+}
 
 // Firebase services
 export const auth = getAuth(app);
@@ -27,7 +40,13 @@ let analytics: any = null;
 if (typeof window !== "undefined") {
   isSupported().then((supported) => {
     if (supported) {
-      analytics = getAnalytics(app);
+      try {
+        analytics = getAnalytics(app);
+        console.log('📊 Analytics initialized');
+      } catch (error) {
+        console.warn('⚠️ Analytics initialization failed:', error);
+        // Don't throw - analytics is non-critical
+      }
     }
   });
 }

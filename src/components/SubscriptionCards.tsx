@@ -62,45 +62,65 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
   const [loading, setLoading] = useState(true);
   const [billingLoading, setBillingLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (user) {
-      fetchSubscriptionData();
-      
-      // Set up real-time listener for subscription changes
+    if (!user) return;
+
+    // Set default state to free plan while loading
+    setSubscriptionData({
+      planType: 'free',
+      planDisplayName: 'Free Plan',
+      auditsUsed: 0,
+      auditsLimit: 5,
+      auditsRemaining: 5,
+      usagePercentage: 0,
+      isNearLimit: false,
+      isActive: true,
+      subscriptionStatus: 'free'
+    });
+
+    // First fetch subscription data from API
+    fetchSubscriptionData().then(() => {
+      // Only set up real-time listener after initial data is fetched
       const unsubscribe = onSnapshot(
-        doc(clientDb, 'subscriptions', user.uid),
-        (snapshot) => {
-          if (snapshot.exists()) {
-            console.log('🔄 Real-time subscription update received');
-            const data = snapshot.data();
-            
-            // Map Firestore data to component state format
-            const currentPeriodEnd = data.currentPeriodEnd?.toDate();
-            const usagePercentage = data.auditsLimit > 0 ? (data.auditsUsed / data.auditsLimit) * 100 : 0;
-            
-            setSubscriptionData({
-              planType: data.planType || 'free',
-              planDisplayName: getPlanDisplayName(data.planType || 'free'),
-              auditsUsed: data.auditsUsed || 0,
-              auditsLimit: data.auditsLimit || 5,
-              auditsRemaining: Math.max(0, (data.auditsLimit || 5) - (data.auditsUsed || 0)),
-              usagePercentage,
-              isNearLimit: (Math.max(0, (data.auditsLimit || 5) - (data.auditsUsed || 0))) <= Math.ceil((data.auditsLimit || 5) * 0.1),
-              isActive: data.status === 'active' || data.planType === 'free',
-              subscriptionStatus: data.status || 'free',
-              currentPeriodEnd,
-              nextBillingDate: currentPeriodEnd?.toISOString(),
-            });
-          }
+        doc(clientDb, 'user_subscription_status', user.uid),
+        {
+          includeMetadataChanges: true,
         },
-        (error) => {
+        (snapshot) => {
+          if (!snapshot.exists()) return;
+
+          console.log('🔄 Real-time subscription update received');
+          const data = snapshot.data();
+          
+          // Map Firestore data to component state format
+          const currentPeriodEnd = data.currentPeriodEnd?.toDate();
+          const usagePercentage = data.auditsLimit > 0 ? (data.auditsUsed / data.auditsLimit) * 100 : 0;
+          
+          setSubscriptionData({
+            planType: data.planType || 'free',
+            planDisplayName: getPlanDisplayName(data.planType || 'free'),
+            auditsUsed: data.auditsUsed || 0,
+            auditsLimit: data.auditsLimit || 5,
+            auditsRemaining: Math.max(0, (data.auditsLimit || 5) - (data.auditsUsed || 0)),
+            usagePercentage,
+            isNearLimit: (Math.max(0, (data.auditsLimit || 5) - (data.auditsUsed || 0))) <= Math.ceil((data.auditsLimit || 5) * 0.1),
+            isActive: data.status === 'active' || data.planType === 'free',
+            subscriptionStatus: data.status || 'free',
+            currentPeriodEnd,
+            nextBillingDate: currentPeriodEnd?.toISOString(),
+          });
+        },
+        (error: any) => {
           console.error('❌ Real-time subscription listener error:', error);
+          setError(error?.message || 'Permission denied');
+          // Don't clear existing data on error, just log it
         }
       );
       
       return () => unsubscribe();
-    }
+    });
   }, [user]);
 
   // Auto-refresh subscription data when usage might have changed
@@ -151,21 +171,44 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
         },
       });
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log(`✅ Subscription data received:`, {
-          planType: data.planType,
-          auditsUsed: data.auditsUsed,
-          auditsLimit: data.auditsLimit,
-          auditsRemaining: data.auditsRemaining
-        });
-        setSubscriptionData(data);
-      } else {
-        console.error('❌ Failed to fetch subscription data:', response.status);
-        // Set default free plan data as fallback
+      if (!response.ok) {
+        throw new Error(`Failed to fetch subscription data: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log(`✅ Subscription data received:`, {
+        planType: data.planType,
+        auditsUsed: data.auditsUsed,
+        auditsLimit: data.auditsLimit,
+        auditsRemaining: data.auditsRemaining
+      });
+
+      if (!data.planType) {
+        throw new Error('Invalid subscription data received');
+      }
+
+      // Don't update state if component is unmounted
+      setSubscriptionData({
+        planType: data.planType,
+        planDisplayName: getPlanDisplayName(data.planType),
+        auditsUsed: data.auditsUsed || 0,
+        auditsLimit: data.auditsLimit || 5,
+        auditsRemaining: data.auditsRemaining || 5,
+        usagePercentage: data.usagePercentage || 0,
+        isNearLimit: data.isNearLimit || false,
+        isActive: data.isActive || data.planType === 'free',
+        subscriptionStatus: data.subscriptionStatus || 'free',
+        nextBillingDate: data.nextBillingDate,
+        currentPeriodEnd: data.currentPeriodEnd
+      });
+    } catch (error) {
+      console.error('❌ Error fetching subscription data:', error);
+      setError((error as any)?.message || 'Failed to load subscription');
+      // Set default free plan data as fallback
+      if (!subscriptionData) {
         setSubscriptionData({
           planType: 'free',
-          planDisplayName: 'Free Plan',
+          planDisplayName: 'Free Plan', 
           auditsUsed: 0,
           auditsLimit: 5,
           auditsRemaining: 5,
@@ -175,20 +218,6 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
           subscriptionStatus: 'free'
         });
       }
-    } catch (error) {
-      console.error('❌ Error fetching subscription data:', error);
-      // Set default free plan data as fallback
-      setSubscriptionData({
-        planType: 'free',
-        planDisplayName: 'Free Plan', 
-        auditsUsed: 0,
-        auditsLimit: 5,
-        auditsRemaining: 5,
-        usagePercentage: 0,
-        isNearLimit: false,
-        isActive: true,
-        subscriptionStatus: 'free'
-      });
     } finally {
       setLoading(false);
     }
@@ -383,27 +412,65 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
     );
   }
 
+  // Show error state with free plan fallback
   if (!subscriptionData) {
+    // Default to free plan data even on error
+    const defaultData = {
+      planType: 'free',
+      planDisplayName: 'Free Plan',
+      auditsUsed: 0,
+      auditsLimit: 5,
+      auditsRemaining: 5,
+      usagePercentage: 0,
+      isNearLimit: false,
+      isActive: true,
+      subscriptionStatus: 'free'
+    };
+
     return (
-      <Card className="bg-white/10 border-white/15 backdrop-blur-xl rounded-3xl shadow-2xl">
-        <CardContent className="p-6 text-center">
-          <p className="text-white/70">Failed to load subscription data</p>
-          <Button 
-            onClick={refreshSubscriptionData}
-            disabled={refreshing}
-            className="mt-4 bg-gradient-to-r from-purple-500 to-indigo-600"
-          >
-            {refreshing ? 'Refreshing...' : 'Retry'}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <Card className="bg-red-500/10 border-red-500/20 backdrop-blur-xl rounded-3xl shadow-2xl">
+          <CardContent className="p-6">
+            <div className="flex items-center gap-3 text-red-200">
+              <AlertTriangle className="w-5 h-5 text-red-400" />
+              <div>
+                <p className="font-medium">Subscription Check Failed</p>
+                <p className="text-sm text-red-300/80">Defaulting to free plan features</p>
+              </div>
+            </div>
+            <Button 
+              onClick={refreshSubscriptionData}
+              disabled={refreshing}
+              className="mt-4 bg-red-500/20 hover:bg-red-500/30 text-red-200 border border-red-500/30"
+              size="sm"
+            >
+              {refreshing ? 'Refreshing...' : 'Retry'}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   const PlanIcon = getPlanIcon(subscriptionData.planType);
 
+  const showErrorBanner = error ? (
+    <Card className="bg-red-500/10 border-red-500/20 backdrop-blur-xl rounded-3xl shadow-2xl mb-6">
+      <CardContent className="p-4">
+        <div className="flex items-center gap-3 text-red-200">
+          <AlertTriangle className="w-5 h-5 text-red-400 flex-shrink-0" />
+          <div>
+            <p className="text-sm">Subscription access error. Falling back to Free plan.</p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  ) : null;
+
   return (
-    <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="space-y-6">
+      {showErrorBanner}
+      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
       {/* Current Plan Card */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -678,6 +745,7 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
           </Card>
         </motion.div>
       )}
+      </div>
     </div>
   );
 });

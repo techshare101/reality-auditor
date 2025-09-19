@@ -7,14 +7,17 @@ export function useUsageListener(userId: string | null) {
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isProUser, setIsProUser] = useState(false);
 
   useEffect(() => {
-    let unsubscribe: (() => void) | undefined;
+    let unsubscribeUsage: (() => void) | undefined;
+    let unsubscribeUser: (() => void) | undefined;
     let mounted = true;
 
     async function setupListener() {
       if (!userId) {
         setLoading(false);
+        setIsProUser(false);
         return;
       }
 
@@ -28,17 +31,16 @@ export function useUsageListener(userId: string | null) {
           }
         });
 
-        const ref = doc(db, "usage", userId);
+        // Usage listener
+        const usageRef = doc(db, "usage", userId);
         if (!mounted) return;
 
         setLoading(true);
         setError(null);
 
-        unsubscribe = onSnapshot(
-          ref,
-          {
-            includeMetadataChanges: true,
-          },
+        unsubscribeUsage = onSnapshot(
+          usageRef,
+          { includeMetadataChanges: true },
           (snap) => {
             if (!mounted) return;
 
@@ -58,22 +60,36 @@ export function useUsageListener(userId: string | null) {
           },
           (err) => {
             if (!mounted) return;
-            
             console.error("Error listening to usage:", err);
             setError(err.message);
             setLoading(false);
-            
-            // Attempt to recover by retrying in 5 seconds
-            setTimeout(() => {
-              if (mounted) {
-                setupListener();
-              }
-            }, 5000);
+            setTimeout(() => { if (mounted) setupListener(); }, 5000);
+          }
+        );
+
+        // User subscription listener (source of truth for Pro)
+        const userRef = doc(db, "users", userId);
+        unsubscribeUser = onSnapshot(
+          userRef,
+          { includeMetadataChanges: true },
+          (snap) => {
+            if (!mounted) return;
+            if (snap.exists()) {
+              const data: any = snap.data();
+              const currentPeriodEnd = data.current_period_end?.toDate?.() || null;
+              const isActive = data.isActive || data.isProUser || (data.status === 'active') || (!!currentPeriodEnd && currentPeriodEnd > new Date());
+              setIsProUser(isActive && (data.plan === 'pro' || data.plan === 'team'));
+            } else {
+              setIsProUser(false);
+            }
+          },
+          (err) => {
+            console.warn('Subscription status listener error:', err);
+            setIsProUser(false);
           }
         );
       } catch (err) {
         if (!mounted) return;
-        
         console.error("Failed to setup usage listener:", err);
         setError(err instanceof Error ? err.message : "An unexpected error occurred");
         setLoading(false);
@@ -84,11 +100,10 @@ export function useUsageListener(userId: string | null) {
 
     return () => {
       mounted = false;
-      if (unsubscribe) {
-        unsubscribe();
-      }
+      if (unsubscribeUsage) unsubscribeUsage();
+      if (unsubscribeUser) unsubscribeUser();
     };
   }, [userId]);
 
-  return { usage, loading, error };
+  return { usage, loading, error, isProUser };
 }
