@@ -9,7 +9,7 @@ initializeApp({
 const db = getFirestore();
 
 // Old IDs to replace
-import { STRIPE_PRICES } from '../lib/stripe-config';
+import { STRIPE_PRICES } from '../src/lib/stripe-config';
 
 const oldIds = [
   "price_1S1tnbGnOgSIwPZhYfV3aFXe",
