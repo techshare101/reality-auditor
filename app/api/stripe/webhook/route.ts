@@ -3,14 +3,21 @@ import { db as adminDb } from "@/lib/firebase-admin";
 import { FieldValue } from "firebase-admin/firestore";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2025-08-27.basil",
+  apiVersion: "2024-09-30.acacia",
 });
 
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
 
 async function updateSubscription(uid: string, data: any) {
   try {
-    console.log("📝 Updating subscription for", uid, data);
+    console.log("📝 Updating subscription for user", {
+      userId: uid,
+      plan: data.plan,
+      status: data.status,
+      subscriptionId: data.subscriptionId,
+      customerId: data.customerId,
+      currentPeriodEnd: data.current_period_end
+    });
 
     await adminDb.collection("user_subscriptions").doc(uid).set(data, { merge: true });
     await adminDb.collection("users").doc(uid).set({
@@ -33,6 +40,15 @@ async function handleEvent(event: Stripe.Event) {
         const session = event.data.object as Stripe.Checkout.Session;
         const userId = session.metadata?.userId || session.metadata?.uid;
         if (!userId) throw new Error("Missing userId in session metadata");
+
+        // Verify price ID matches subscription plan
+        const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
+        const priceId = subscription.items.data[0].price.id;
+        console.log("✨ Subscription created with price:", priceId);
+
+        if (priceId !== "price_1S2KmxGRxp9eu0DJrdcrLLNR") {
+          console.warn("⚠️ Unexpected price ID:", priceId);
+          // Still proceed since it might be a different valid plan
 
         await updateSubscription(userId, {
           plan: "pro",
@@ -110,7 +126,14 @@ export async function POST(req: Request) {
 
   try {
     const event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    console.log("🎯 Processing webhook event:", {
+      type: event.type,
+      id: event.id
+    });
+    
     await handleEvent(event); // ✅ await so errors are caught
+    
+    console.log("✅ Webhook processed successfully");
     return new Response("ok", { status: 200 });
   } catch (err: any) {
     console.error("❌ Webhook verification failed:", err.message);

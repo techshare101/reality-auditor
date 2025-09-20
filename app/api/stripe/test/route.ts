@@ -15,7 +15,7 @@ export async function GET() {
     }
 
     // Try to retrieve the price to verify it exists
-    const priceId = 'price_1S1tnbGnOgSIwPZhYfV3aFXe';
+    const priceId = 'price_1S2KmxGRxp9eu0DJrdcrLLNR';
     
     try {
       const price = await stripe.prices.retrieve(priceId);

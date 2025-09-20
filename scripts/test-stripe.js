@@ -25,7 +25,7 @@ async function testStripeIntegration() {
   try {
     // Test 2: Verify your Price ID exists
     console.log('💰 Testing your actual Price ID...');
-    const priceId = 'price_1S1tnbGnOgSIwPZhYfV3aFXe';
+    const priceId = 'price_1S2KmxGRxp9eu0DJrdcrLLNR';
     
     const price = await stripe.prices.retrieve(priceId);
     console.log('✅ Price found:', {

@@ -1,10 +1,12 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUsageListener } from "@/hooks/useUsageListener";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 import { 
   Zap, 
   Lock, 
@@ -12,7 +14,8 @@ import {
   ArrowRight,
   Loader2,
   AlertCircle,
-  Sparkles
+  Sparkles,
+  CalendarClock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { AuditBadge } from "@/components/AuditBadge";
@@ -21,6 +24,37 @@ import { useUnifiedAuditAccess } from "@/hooks/useUnifiedAuditAccess";
 export default function UsageDisplay() {
   const { user } = useAuth();
   const router = useRouter();
+  const { isProUser, plan, used = 0, loading, error, showPaywall } = useUnifiedAuditAccess();
+  const [renewalDate, setRenewalDate] = useState<string | null>(null);
+
+  // Listen for subscription renewal date
+  useEffect(() => {
+    if (!user?.uid || !isProUser) return;
+
+    const unsub = onSnapshot(
+      doc(db, "user_subscriptions", user.uid),
+      { includeMetadataChanges: true },
+      (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.current_period_end) {
+            const date = data.current_period_end.toDate?.();
+            if (date) {
+              setRenewalDate(
+                date.toLocaleDateString(undefined, {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                })
+              );
+            }
+          }
+        }
+      }
+    );
+
+    return () => unsub();
+  }, [user?.uid, isProUser]);
   
   // Handle unauthenticated users
   if (!user) {
@@ -68,17 +102,6 @@ export default function UsageDisplay() {
       </motion.div>
     );
   }
-  
-  const { isProUser, used, loading, error, plan, canAudit, showPaywall } = useUnifiedAuditAccess();
-
-  // Show Pro badge instead of usage for Pro users
-  if (isProUser) {
-    return (
-      <div className="mb-4">
-        <AuditBadge />
-      </div>
-    );
-  }
 
   if (loading) {
     return (
@@ -102,11 +125,45 @@ export default function UsageDisplay() {
     );
   }
 
-  // Calculate derived values
-  const audit_limit = 5; // Free plan limit
-  const audits_used = used;
+  // Show Pro status display for Pro users
+  if (isProUser) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl bg-gradient-to-br from-green-900/40 to-emerald-900/20 backdrop-blur-xl p-6 border border-green-500/30 shadow-xl shadow-green-500/10"
+      >
+        <div className="flex items-center justify-center gap-2 mb-3">
+          <Sparkles className="w-4 h-4 text-green-400" />
+          <span className="text-sm text-green-200">Pro Access</span>
+          <span className="text-[10px] bg-green-600/60 text-green-100 px-2 py-0.5 rounded-full uppercase">
+            {plan || 'PRO'}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-3 p-3 rounded-xl bg-white/5 border border-white/10">
+          <Sparkles className="w-5 h-5 text-green-400" />
+          <div>
+            <p className="text-green-100 font-medium">Unlimited Audits Active</p>
+            <p className="text-green-300/80 text-sm">No monthly restrictions</p>
+          </div>
+        </div>
+
+        {renewalDate && (
+          <div className="mt-3 flex items-center justify-center gap-2 text-xs text-green-300/80">
+            <CalendarClock className="w-4 h-4" />
+            <span>Renews {renewalDate}</span>
+          </div>
+        )}
+      </motion.div>
+    );
+  }
+
+  // Calculate derived values for free users
+  const audit_limit = 5;
+  const audits_used = used || 0;
   const remaining = Math.max(0, audit_limit - audits_used);
-  const percentUsed = Math.min(100, (audits_used / audit_limit) * 100);
+  const percentUsed = Math.min(100, ((audits_used || 0) / audit_limit) * 100);
   const isLimitReached = showPaywall;
 
   // Color based on usage

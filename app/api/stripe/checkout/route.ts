@@ -4,16 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { getStripe, stripeHelpers } from "@/lib/stripeClient";
 import type Stripe from "stripe";
 
-// Live Stripe Price IDs
-const PRICE_PLANS: Record<string, string> = {
-  basic_monthly: "price_1S2KmxGRxp9eu0DJrdcrLLNR", // ✅ Your $19/month plan
-  // Placeholders (update when ready)
-  basic_yearly: "price_basic_yearly_placeholder",
-  pro_monthly: "price_pro_monthly_placeholder",
-  pro_yearly: "price_pro_yearly_placeholder",
-  enterprise_monthly: "price_enterprise_monthly_placeholder",
-  enterprise_yearly: "price_enterprise_yearly_placeholder",
-};
+import { STRIPE_PRICES, PLAN_METADATA } from '@/lib/stripe-config';
 
 export async function POST(request: NextRequest) {
   try {
@@ -22,7 +13,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const { priceId } = body;
 
-    if (!priceId || !Object.values(PRICE_PLANS).includes(priceId)) {
+    if (!priceId || !Object.values(STRIPE_PRICES).includes(priceId)) {
       return NextResponse.json({ error: "Invalid price ID" }, { status: 400 });
     }
 
@@ -102,27 +93,16 @@ export async function GET() {
   return NextResponse.json({
     plans: {
       basic: {
-        monthly: PRICE_PLANS.basic_monthly,
-        yearly: PRICE_PLANS.basic_yearly,
-        name: "Basic Plan",
-        price: 19,
-        audits: 50,
-        features: [
-          "50 audits/month",
-          "Advanced analysis",
-          "Email support",
-          "Priority processing",
-        ],
+        monthly: STRIPE_PRICES.basic_monthly,
+        name: PLAN_METADATA.basic_monthly.name,
+        price: PLAN_METADATA.basic_monthly.price,
+        features: PLAN_METADATA.basic_monthly.features,
       },
     },
     available: {
       basic_monthly: {
-        priceId: PRICE_PLANS.basic_monthly,
-        name: "Basic Plan",
-        price: 19,
-        currency: "USD",
-        interval: "month",
-        audits: 50,
+        priceId: STRIPE_PRICES.basic_monthly,
+        ...PLAN_METADATA.basic_monthly,
       },
     },
   });

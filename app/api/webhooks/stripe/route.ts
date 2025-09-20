@@ -7,13 +7,10 @@ import { getFirestore } from 'firebase-admin/firestore';
 import type { Stripe } from 'stripe';
 
 // Helper to get audit limit based on plan
+import { PLAN_AUDIT_LIMITS } from '@/lib/stripe-config';
+
 function getAuditLimit(plan: string) {
-  return {
-    free: 5,
-    basic: 30,
-    pro: 100,
-    team: 500,
-  }[plan] || 5;
+  return PLAN_AUDIT_LIMITS[plan as keyof typeof PLAN_AUDIT_LIMITS] || PLAN_AUDIT_LIMITS.free;
 }
 
 // Enhanced logging for webhook events
