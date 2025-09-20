@@ -24,7 +24,8 @@ import { useUnifiedAuditAccess } from "@/hooks/useUnifiedAuditAccess";
 export default function UsageDisplay() {
   const { user } = useAuth();
   const router = useRouter();
-  const { isProUser, plan, used = 0, loading, error, showPaywall } = useUnifiedAuditAccess();
+  const { isProUser, plan, audits_used = 0, loading } = useUnifiedAuditAccess();
+  const showPaywall = !isProUser && audits_used >= 5;
   const [renewalDate, setRenewalDate] = useState<string | null>(null);
 
   // Listen for subscription renewal date
@@ -114,16 +115,6 @@ export default function UsageDisplay() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="rounded-2xl bg-red-900/20 backdrop-blur-xl p-4 border border-red-800/50">
-        <div className="flex items-center gap-3">
-          <AlertCircle className="w-4 h-4 text-red-400" />
-          <span className="text-sm text-red-400">Error loading usage</span>
-        </div>
-      </div>
-    );
-  }
 
   // Show Pro status display for Pro users
   if (isProUser) {
@@ -161,9 +152,8 @@ export default function UsageDisplay() {
 
   // Calculate derived values for free users
   const audit_limit = 5;
-  const audits_used = used || 0;
   const remaining = Math.max(0, audit_limit - audits_used);
-  const percentUsed = Math.min(100, ((audits_used || 0) / audit_limit) * 100);
+  const percentUsed = Math.min(100, (audits_used / audit_limit) * 100);
   const isLimitReached = showPaywall;
 
   // Color based on usage
