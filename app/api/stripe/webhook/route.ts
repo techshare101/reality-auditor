@@ -1,142 +1,277 @@
-import Stripe from "stripe";
-import { db as adminDb } from "@/lib/firebase-admin";
-import { FieldValue } from "firebase-admin/firestore";
+import { headers } from 'next/headers';
+import { NextRequest, NextResponse } from 'next/server';
+import { getStripe } from '@/lib/stripeClient';
+import { db } from '@/lib/firebase-admin';
+import { sendUsageResetEmail } from '@/lib/email';
+import { getFirestore } from 'firebase-admin/firestore';
+import type { Stripe } from 'stripe';
+import { PLAN_AUDIT_LIMITS } from '@/lib/stripe-config';
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-09-30.acacia",
-});
+// Helper functions
+function getAuditLimit(plan: string) {
+  return PLAN_AUDIT_LIMITS[plan as keyof typeof PLAN_AUDIT_LIMITS] || PLAN_AUDIT_LIMITS.free;
+}
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+// Enhanced logging for webhook events
+function logWebhookEvent(event: any, metadata: any = {}) {
+  const timestamp = new Date().toISOString();
+  const eventId = event.id;
+  const eventType = event.type;
 
-async function updateSubscription(uid: string, data: any) {
-  try {
-    console.log("📝 Updating subscription for user", {
-      userId: uid,
-      plan: data.plan,
-      status: data.status,
-      subscriptionId: data.subscriptionId,
-      customerId: data.customerId,
-      currentPeriodEnd: data.current_period_end
-    });
-
-    await adminDb.collection("user_subscriptions").doc(uid).set(data, { merge: true });
-    await adminDb.collection("users").doc(uid).set({
-      ...data,
-      isActive: data.status === "active",
-      isProUser: data.plan === "pro",
-      updatedAt: FieldValue.serverTimestamp(),
-    }, { merge: true });
-
-    console.log("✅ Subscription updated in Firestore");
-  } catch (err) {
-    console.error("🔥 Firestore update failed:", err);
+  console.log(`\n🪝 [${timestamp}] Webhook event received:`);
+  console.log(`   Type: ${eventType}`);
+  console.log(`   ID: ${eventId}`);
+  
+  if (metadata.userId) {
+    console.log(`   User ID: ${metadata.userId}`);
+  }
+  
+  if (metadata.error) {
+    console.error(`   ❌ Error: ${metadata.error}`);
+    if (metadata.errorDetail) {
+      console.error(`   Details: ${metadata.errorDetail}`);
+    }
+  }
+  
+  if (metadata.success) {
+    console.log(`   ✅ Success: ${metadata.success}`);
   }
 }
 
-async function handleEvent(event: Stripe.Event) {
+export async function POST(req: NextRequest) {
+  console.log('\n🔔 Webhook request received');
+  
+  const body = await req.text();
+  const signature = headers().get('stripe-signature');
+
+  if (!signature) {
+    console.error('❌ Missing stripe-signature header');
+    return NextResponse.json(
+      { error: 'Missing stripe-signature header' },
+      { status: 400 }
+    );
+  }
+
+  let event;
+  const stripe = getStripe();
+
   try {
+    event = stripe.webhooks.constructEvent(
+      body,
+      signature,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+    console.log('✅ Webhook signature verified');
+  } catch (err) {
+    console.error('❌ Webhook signature verification failed:', err);
+    return NextResponse.json(
+      { error: 'Webhook signature verification failed' },
+      { status: 400 }
+    );
+  }
+
+  try {
+    logWebhookEvent(event);
+    
     switch (event.type) {
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session;
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        console.log('\n💳 Processing successful payment session:', session.id);
+
+        const { customer: customerId, subscription: subscriptionId } = session;
+        if (!customerId || !subscriptionId) {
+          throw new Error('Missing customer or subscription ID in session');
+        }
+
         const userId = session.metadata?.userId || session.metadata?.uid;
-        if (!userId) throw new Error("Missing userId in session metadata");
+        if (!userId) {
+          throw new Error('No userId found in session metadata');
+        }
 
-        // Verify price ID matches subscription plan
-        const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
-        const priceId = subscription.items.data[0].price.id;
-        console.log("✨ Subscription created with price:", priceId);
-
-        if (priceId !== "price_1S2KmxGRxp9eu0DJrdcrLLNR") {
-          console.warn("⚠️ Unexpected price ID:", priceId);
-          // Still proceed since it might be a different valid plan
-
-        await updateSubscription(userId, {
+        // Update Firestore with new subscription data
+        await updateFirestoreSubscription({
+          userId,
+          customerId: customerId as string,
+          subscriptionId: subscriptionId as string,
           plan: "pro",
           status: "active",
-          subscriptionId: session.subscription as string,
-          customerId: session.customer as string,
-          current_period_end: session.expires_at ? new Date(session.expires_at * 1000) : null,
+          periodEnd: new Date(Date.now() + (30 * 24 * 60 * 60 * 1000)),
+        });
+        
+        logWebhookEvent(event, {
+          userId,
+          success: "Subscription created and Firestore updated"
         });
         break;
       }
 
-      case "customer.subscription.updated":
-      case "customer.subscription.created": {
-        const subscription = event.data.object as any;
-        const customerId = subscription.customer;
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object;
+        console.log('\n🔄 Subscription event:', subscription.id);
 
-        const userSnapshot = await adminDb
-          .collection("users")
-          .where("stripeCustomerId", "==", customerId)
-          .limit(1)
+        // Find the user by customer ID
+        const customerDoc = await getFirestore()
+          .collection('stripe_customers')
+          .doc(subscription.customer as string)
           .get();
-
-        if (!userSnapshot.empty) {
-          const userId = userSnapshot.docs[0].id;
-          await updateSubscription(userId, {
-            plan: subscription.status === "active" ? "pro" : "free",
-            status: subscription.status,
-            subscriptionId: subscription.id,
-            customerId,
-            current_period_end: subscription.current_period_end
-              ? new Date(subscription.current_period_end * 1000)
-              : null,
-          });
+          
+        if (!customerDoc.exists) {
+          throw new Error(`No user found for customer: ${subscription.customer}`);
         }
+        
+        const userId = customerDoc.data()?.userId;
+        if (!userId) {
+          throw new Error(`No userId in customer mapping: ${subscription.customer}`);
+        }
+        
+        await updateFirestoreSubscription({
+          userId,
+          customerId: subscription.customer as string,
+          subscriptionId: subscription.id,
+          plan: "pro",
+          status: subscription.status as string,
+          periodEnd: new Date((subscription as any).current_period_end * 1000)
+        });
+        
+        logWebhookEvent(event, {
+          userId,
+          success: "Subscription processed"
+        });
         break;
       }
 
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as any;
-        const customerId = subscription.customer;
-
-        const userSnapshot = await adminDb
-          .collection("users")
-          .where("stripeCustomerId", "==", customerId)
-          .limit(1)
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object;
+        console.log('❌ Subscription cancelled:', subscription.id);
+        
+        // Find the user by customer ID
+        const customerDoc = await getFirestore()
+          .collection('stripe_customers')
+          .doc(subscription.customer as string)
           .get();
 
-        if (!userSnapshot.empty) {
-          const userId = userSnapshot.docs[0].id;
-          await updateSubscription(userId, {
-            plan: "free",
-            status: "cancelled",
-            subscriptionId: subscription.id,
-            customerId,
-          });
+        if (!customerDoc.exists) {
+          throw new Error(`No user found for customer: ${subscription.customer}`);
+        }
+
+        const userId = customerDoc.data()?.userId;
+        if (!userId) {
+          throw new Error(`No userId in customer mapping: ${subscription.customer}`);
+        }
+
+        await updateFirestoreSubscription({
+          userId,
+          customerId: subscription.customer as string,
+          subscriptionId: subscription.id,
+          plan: "free",
+          status: "cancelled",
+          periodEnd: new Date()
+        });
+
+        logWebhookEvent(event, {
+          userId,
+          success: "Subscription cancelled"
+        });
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object;
+        console.log('✅ Invoice paid:', invoice.id);
+        
+        if ((invoice as any).subscription && invoice.billing_reason === 'subscription_cycle') {
+          const customerDoc = await getFirestore()
+            .collection('stripe_customers')
+            .doc(invoice.customer as string)
+            .get();
+
+          if (customerDoc.exists) {
+            const userId = customerDoc.data()?.userId;
+            if (userId) {
+              // Reset usage count
+              await getFirestore().collection('usage').doc(userId).update({
+                audits_used: 0,
+                last_reset: new Date(),
+                updatedAt: new Date()
+              });
+
+              try {
+                await sendUsageResetEmail(userId, 'pro', getAuditLimit('pro'));
+              } catch (error) {
+                console.warn('Failed to send usage reset email:', error);
+              }
+            }
+          }
         }
         break;
       }
 
       default:
-        console.log("⚠️ Unhandled event type:", event.type);
+        console.log(`Unhandled event type: ${event.type}`);
     }
-  } catch (err) {
-    console.error("🔥 handleEvent failed:", err);
+
+    return NextResponse.json({ received: true });
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    return NextResponse.json(
+      { error: 'Webhook processing failed' },
+      { status: 500 }
+    );
   }
 }
 
-export async function POST(req: Request) {
-  const body = await req.text();
-  const signature = req.headers.get("stripe-signature");
-
-  if (!signature) {
-    return new Response("Missing stripe-signature", { status: 400 });
-  }
-
-  try {
-    const event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-    console.log("🎯 Processing webhook event:", {
-      type: event.type,
-      id: event.id
-    });
-    
-    await handleEvent(event); // ✅ await so errors are caught
-    
-    console.log("✅ Webhook processed successfully");
-    return new Response("ok", { status: 200 });
-  } catch (err: any) {
-    console.error("❌ Webhook verification failed:", err.message);
-    return new Response(`Webhook Error: ${err.message}`, { status: 400 });
-  }
+// Helper function to update Firestore subscription data
+async function updateFirestoreSubscription(data: {
+  userId: string;
+  customerId: string;
+  subscriptionId: string;
+  plan: string;
+  status: string;
+  periodEnd: Date;
+}) {
+  const { userId, customerId, subscriptionId, plan, status, periodEnd } = data;
+  const now = new Date();
+  
+  const batch = getFirestore().batch();
+  
+  // 1. Main subscription record
+  const subRef = getFirestore().collection('subscriptions').doc(userId);
+  batch.set(subRef, {
+    stripeCustomerId: customerId,
+    stripeSubscriptionId: subscriptionId,
+    plan,
+    status,
+    currentPeriodEnd: periodEnd,
+    updatedAt: now,
+  }, { merge: true });
+  
+  // 2. User subscription status
+  const statusRef = getFirestore().collection('user_subscription_status').doc(userId);
+  batch.set(statusRef, {
+    plan,
+    status,
+    isActive: status === 'active',
+    stripeSubscriptionId: subscriptionId,
+    currentPeriodEnd: periodEnd,
+    updatedAt: now,
+  }, { merge: true });
+  
+  // 3. Usage limits
+  const usageRef = getFirestore().collection('usage').doc(userId);
+  batch.set(usageRef, {
+    plan,
+    audit_limit: getAuditLimit(plan),
+    audits_used: 0, // Reset on subscription change
+    updatedAt: now,
+  }, { merge: true });
+  
+  // 4. Customer mapping
+  const customerRef = getFirestore().collection('stripe_customers').doc(customerId);
+  batch.set(customerRef, {
+    userId,
+    updatedAt: now,
+  }, { merge: true });
+  
+  await batch.commit();
 }
