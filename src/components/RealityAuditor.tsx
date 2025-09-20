@@ -170,7 +170,12 @@ function getTruthScoreGradient(score: number): string {
 
 export default function RealityAuditorApp({ initialData, demoMode }: { initialData?: any; demoMode?: boolean }) {
   const { user } = useAuth();
-  const { used, canAudit, showPaywall, loading: subscriptionLoading } = useUnifiedAuditAccess();
+  const { audits_used, isProUser, loading: subscriptionLoading } = useUnifiedAuditAccess();
+  
+  // Derive the missing properties for backward compatibility
+  const used = audits_used;
+  const canAudit = isProUser || used < 5;
+  const showPaywall = !isProUser && used >= 5;
   const { increment: incrementUsage } = useHybridAuditLimit(5);
   const [url, setUrl] = useState("");
   const [content, setContent] = useState("");
