@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin";
 import { getStripe, stripeHelpers } from "@/lib/stripeClient";
 import type Stripe from "stripe";
 
-import { STRIPE_PRICES, PLAN_METADATA } from '@/lib/stripe-config';
+import { STRIPE_PRICES, PLAN_METADATA } from '../../../lib/stripe-config';
 
 export async function POST(request: NextRequest) {
   try {
