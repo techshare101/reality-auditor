@@ -196,8 +196,6 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
   const [mounted, setMounted] = useState(false);
   
-  const isProUser = canAudit && used !== undefined;
-  
   // Ensure client-side only rendering for user-dependent content
   useEffect(() => {
     setMounted(true);
