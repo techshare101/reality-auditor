@@ -1,0 +1,15 @@
+[build]
+  command = "pnpm run build"
+  publish = ".next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[build.environment]
+  NEXT_PRIVATE_TARGET = "server"
+
+# Handle Next.js routing for SPA-style navigation
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

@@ -1,114 +1,43 @@
-"use client";
-
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuthState } from "react-firebase-hooks/auth";
+import { auth, db } from "@/lib/firebase";
 
-export interface UnifiedAuditAccess {
-  isProUser: boolean;
-  plan: string;
-  used: number;
-  canAudit: boolean;
-  showPaywall: boolean;
-  renewalDate: string | null;
-  loading: boolean;
-  error: string | null;
-}
-
-export function useUnifiedAuditAccess(): UnifiedAuditAccess {
-  const { user } = useAuth();
+export function useUnifiedAuditAccess() {
+  const [user] = useAuthState(auth);
+  const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<UnifiedAuditAccess>({
-    isProUser: false,
-    plan: "free",
-    used: 0,
-    canAudit: true,
-    showPaywall: false,
-    renewalDate: null,
-    loading: true,
-    error: null
-  });
 
   useEffect(() => {
-    if (!user?.uid) {
-      setData(prev => ({ ...prev, loading: false, error: null }));
+    if (!user) {
+      setUserData(null);
       setLoading(false);
       return;
     }
 
-    console.log(`🔍 Setting up unified access listener for ${user.uid}`);
-    const userRef = doc(db, "users", user.uid);
-
-    const unsubscribe = onSnapshot(userRef, (snap) => {
-      if (snap.exists()) {
-        const userData = snap.data();
-        const currentPeriodEnd = userData.current_period_end?.toDate?.() || null;
-
-        const isActive = userData.isActive || 
-          userData.isProUser || 
-          (userData.status === "active") || 
-          (!!currentPeriodEnd && currentPeriodEnd > new Date());
-
-        const isProUser = isActive && (userData.plan === "pro" || userData.plan === "team");
-        const used = userData.audits_used || 0;
-        const canAudit = isProUser || used < 5;
-        const showPaywall = !isProUser && used >= 5;
-
-        let renewalDate = null;
-        if (currentPeriodEnd) {
-          renewalDate = currentPeriodEnd.toLocaleDateString(undefined, {
-            month: "long",
-            day: "numeric",
-            year: "numeric"
-          });
-        }
-
-        setData({
-          isProUser,
-          plan: userData.plan || "free",
-          used,
-          canAudit,
-          showPaywall,
-          renewalDate,
-          loading: false,
-          error: null
-        });
-
-        console.log(`✅ Access updated:`, { isProUser, plan: userData.plan, used, canAudit });
+    const unsub = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+      if (docSnap.exists()) {
+        setUserData(docSnap.data());
       } else {
-        setData({
-          isProUser: false,
-          plan: "free",
-          used: 0,
-          canAudit: true,
-          showPaywall: false,
-          renewalDate: null,
-          loading: false,
-          error: null
-        });
+        setUserData(null);
       }
-      setLoading(false);
-    }, error => {
-      console.error("Failed to fetch user status:", error);
-      setData({
-        isProUser: false,
-        plan: "free",
-        used: 0,
-        canAudit: true,
-        showPaywall: false,
-        renewalDate: null,
-        loading: false,
-        error: (error as any)?.message || 'Permission denied or network error'
-      });
       setLoading(false);
     });
 
-    return () => unsubscribe();
-  }, [user?.uid]);
+    return () => unsub();
+  }, [user]);
+
+  // Normalize plan & usage
+  const plan = userData?.plan || "free";
+  const isProUser = plan === "pro";
+  const audits_used = userData?.audits_used ?? 0;
 
   return {
-    ...data,
-    loading
+    user,
+    userData,
+    plan,
+    isProUser,
+    audits_used,
+    loading,
   };
 }
