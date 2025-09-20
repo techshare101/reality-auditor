@@ -5,7 +5,7 @@ import { db } from '@/lib/firebase-admin';
 import { sendUsageResetEmail } from '@/lib/email';
 import { getFirestore } from 'firebase-admin/firestore';
 import type { Stripe } from 'stripe';
-import { PLAN_AUDIT_LIMITS } from '../../../../lib/stripe-config';
+import { PLAN_AUDIT_LIMITS } from '@/lib/stripe-config';
 
 // Helper functions
 function getAuditLimit(plan: string) {
