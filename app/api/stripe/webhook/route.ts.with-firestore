@@ -8,12 +8,7 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 });
 
-export const config = {
-  api: {
-    bodyParser: false, // ❌ disable body parsing, Stripe needs raw
-  },
-};
-
+// In App Router, we handle raw body directly in the function
 export async function POST(req: Request) {
   const sig = req.headers.get("stripe-signature") as string;
   const body = await req.text();
