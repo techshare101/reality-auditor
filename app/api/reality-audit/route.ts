@@ -74,8 +74,8 @@ export async function POST(request: NextRequest) {
       console.log(`📊 Checking usage for ${userId}...`);
       
       try {
-        // Check subscription status first (with email for webhook compatibility)
-        const subscriptionStatus = await checkSubscriptionStatus(userId, userEmail || undefined);
+        // Check subscription status
+        const subscriptionStatus = await checkSubscriptionStatus(userId);
         console.log(`📊 Subscription status:`, {
           isActive: subscriptionStatus.isActive,
           auditsUsed: subscriptionStatus.auditsUsed,
