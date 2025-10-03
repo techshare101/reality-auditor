@@ -305,6 +305,22 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
   }, []);
 
   async function onAudit() {
+    // Debug logging
+    console.log("🔍 AUDIT CHECK DEBUG:", {
+      user: user?.uid,
+      proStatus,
+      isProUser,
+      used,
+      demoMode,
+      shouldBlock: !isProUser && used >= 5
+    });
+    
+    // Wait for pro status to load if still loading
+    if (proStatus === "loading") {
+      console.log("⏳ Waiting for Pro status to load...");
+      return;
+    }
+    
     // Skip limit checks for demo mode and Pro users
     if (!demoMode) {
       // Pro users bypass all limits
