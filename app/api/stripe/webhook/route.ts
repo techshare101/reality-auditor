@@ -150,7 +150,7 @@ export async function POST(req: Request) {
         console.log("💰 Payment succeeded:", invoice.id);
         
         // Reset monthly usage on subscription renewal
-        if (invoice.subscription && invoice.billing_reason === "subscription_cycle") {
+        if ((invoice as any).subscription && (invoice as any).billing_reason === "subscription_cycle") {
           const customerDoc = await db.collection("stripe_customers")
             .doc(invoice.customer as string)
             .get();
