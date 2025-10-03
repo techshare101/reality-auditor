@@ -1,5 +1,5 @@
 import { useProStatus } from "@/hooks/useProStatus";
-import { useAuth } from "@/lib/hooks/useAuth"; // adjust to your auth hook
+import { useAuth } from "@/hooks/useAuth";
 
 export default function ProBadge({ className = "" }: { className?: string }) {
   const { user } = useAuth();
