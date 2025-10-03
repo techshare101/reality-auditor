@@ -81,12 +81,11 @@ export default function AuditUsageBadge() {
           <div className="w-24 mt-1">
             <Progress 
               value={usage.percentage} 
-              className="h-1.5"
-              indicatorClassName={
+              className={`h-1.5 ${
                 usage.isNearLimit 
-                  ? "bg-amber-500" 
-                  : "bg-blue-500"
-              }
+                  ? "[&>*[data-slot='progress-indicator']]:bg-amber-500" 
+                  : "[&>*[data-slot='progress-indicator']]:bg-blue-500"
+              }`}
             />
           </div>
         )}
