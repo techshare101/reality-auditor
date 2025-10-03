@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { AuditRequestSchema, RealityAuditSchema } from "@/lib/schemas";
 import { getCitations, getFactCheckSources } from "@/lib/tavily";
-import { checkSubscriptionStatus, incrementUsage } from "@/lib/subscription-checker";
+import { checkSubscriptionStatus, incrementUsage } from "@/lib/subscription-checker-v2";
 import { auth, db } from "@/lib/firebase-admin";
 import { adjustTruthScore, buildRefinedSummary, getTrustBadge, buildTransparencyReport, calculateConfidenceLevel } from "@/lib/scoring";
 import OpenAI from "openai";
