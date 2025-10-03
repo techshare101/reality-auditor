@@ -33,7 +33,8 @@ export async function checkSubscriptionStatus(userId: string): Promise<Subscript
     const subscriptionStatus = profileDoc.exists ? 
       (profileDoc.data()?.subscription_status || 'free') : 'free';
     
-    const isPro = subscriptionStatus === 'pro';
+    // Check if user is Pro (subscription_status is 'active' or 'pro')
+    const isPro = subscriptionStatus === 'active' || subscriptionStatus === 'pro';
     
     // Get current usage
     const auditsUsed = usageDoc.exists ? (usageDoc.data()?.audits_used || 0) : 0;
@@ -46,7 +47,7 @@ export async function checkSubscriptionStatus(userId: string): Promise<Subscript
         auditsUsed,
         auditsLimit: 999999, // Effectively unlimited
         auditsRemaining: 999999,
-        subscriptionStatus: 'pro',
+        subscriptionStatus: 'active',
         currentPeriodEnd: profileDoc.data()?.current_period_end?.toDate(),
       };
     }
@@ -89,8 +90,9 @@ export async function incrementUsage(userId: string): Promise<UsageUpdateResult>
     const usageRef = db.collection('usage').doc(userId);
     const profileDoc = await db.collection('profiles').doc(userId).get();
     
-    // Check if user is Pro
-    const isPro = profileDoc.exists && profileDoc.data()?.subscription_status === 'pro';
+    // Check if user is Pro (active subscription)
+    const isPro = profileDoc.exists && 
+      (profileDoc.data()?.subscription_status === 'active' || profileDoc.data()?.subscription_status === 'pro');
     
     // Pro users don't need usage tracking
     if (isPro) {

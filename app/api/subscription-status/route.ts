@@ -45,18 +45,19 @@ export async function GET(request: NextRequest) {
 
     // Map the response to match what SubscriptionCards expects
     const response = {
-      planType: subscriptionStatus.isPro ? 'pro' : 'free',
-      planDisplayName: subscriptionStatus.isPro ? 'Pro Plan' : 'Free Plan',
-      auditsUsed: subscriptionStatus.audits_used,
-      auditsLimit: subscriptionStatus.audits_limit,
-      auditsRemaining: subscriptionStatus.audits_remaining,
-      usagePercentage: subscriptionStatus.audits_limit > 0 ? 
-        (subscriptionStatus.audits_used / subscriptionStatus.audits_limit) * 100 : 0,
-      isNearLimit: subscriptionStatus.audits_remaining <= Math.ceil(subscriptionStatus.audits_limit * 0.1),
-      isActive: subscriptionStatus.isPro || subscriptionStatus.audits_remaining > 0,
-      subscriptionStatus: subscriptionStatus.isPro ? 'active' : 'free',
+      planType: subscriptionStatus.planType,
+      planDisplayName: subscriptionStatus.planType === 'pro' ? 'Pro Plan' : 'Free Plan',
+      auditsUsed: subscriptionStatus.auditsUsed,
+      auditsLimit: subscriptionStatus.auditsLimit,
+      auditsRemaining: subscriptionStatus.auditsRemaining,
+      usagePercentage: subscriptionStatus.auditsLimit > 0 ? 
+        (subscriptionStatus.auditsUsed / subscriptionStatus.auditsLimit) * 100 : 0,
+      isNearLimit: subscriptionStatus.auditsRemaining <= Math.ceil(subscriptionStatus.auditsLimit * 0.1),
+      isActive: subscriptionStatus.isActive,
+      subscriptionStatus: subscriptionStatus.subscriptionStatus,
       userId,
       timestamp: new Date().toISOString(),
+      currentPeriodEnd: subscriptionStatus.currentPeriodEnd?.toISOString(),
     };
 
     console.log(`✅ Subscription summary for ${userId}:`, {
