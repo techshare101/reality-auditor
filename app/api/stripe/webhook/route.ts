@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
-import Stripe from "stripe";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-09-30.acacia",
-});
+import { getStripe } from "@/lib/stripeClient";
+import type { Stripe } from "stripe";
 
 // In App Router, we handle raw body directly in the function
 export async function POST(req: Request) {
   const sig = req.headers.get("stripe-signature") as string;
   const body = await req.text();
+  
+  const stripe = getStripe();
 
   try {
     const event = stripe.webhooks.constructEvent(
