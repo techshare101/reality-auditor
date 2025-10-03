@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useProStatus } from "@/hooks/useProStatus";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MissionBannerProps {
-  planType?: string;
   isNearLimit?: boolean;
 }
 
-export default function MissionBanner({ planType = 'free', isNearLimit = false }: MissionBannerProps) {
+export default function MissionBanner({ isNearLimit = false }: MissionBannerProps) {
+  const { user } = useAuth();
+  const status = useProStatus(user?.uid);
+  const planType = status === 'pro' ? 'pro' : 'free';
   // Different slogans based on plan type
   const freeSlogans = [
     "🛡️ Cutting through fake news noise",

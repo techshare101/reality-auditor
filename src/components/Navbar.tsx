@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import { Eye, LogOut, LayoutDashboard, CreditCard } from "lucide-react";
 import { motion } from "framer-motion";
+import TopBadge from "@/components/TopBadge";
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -26,6 +27,7 @@ export default function Navbar() {
           <div className="flex items-center gap-6">
             {user ? (
               <>
+                <TopBadge className="px-3 py-1 rounded-full text-white font-medium" />
                 <Link 
                   href="/dashboard" 
                   className="flex items-center gap-2 text-gray-300 hover:text-white transition-colors"

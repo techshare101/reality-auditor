@@ -572,7 +572,6 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
             <div className="space-y-4">
               {/* Dynamic Mission Banner */}
               <MissionBanner 
-                planType={subscriptionData.planType}
                 isNearLimit={subscriptionData.isNearLimit}
               />
               

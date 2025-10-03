@@ -16,6 +16,7 @@ import { showToast, ToastProvider } from "@/components/GlowingToast";
 import ToastContainer from "@/components/ToastContainer";
 import Image from "next/image";
 import { useSubscriptionSync } from "@/hooks/useSubscriptionSync";
+import TopBadge from "@/components/TopBadge";
 
 export default function DashboardClient() {
   // All hooks must be called unconditionally at the top level
@@ -176,6 +177,7 @@ export default function DashboardClient() {
             </div>
             
             <div className="flex items-center gap-3">
+              <TopBadge className="px-3 py-1 rounded-full text-white font-medium" />
               <div className="flex items-center gap-2 px-3 py-2 rounded-full bg-white/10 border border-white/15">
                 <User className="w-4 h-4" />
                 <span className="text-sm">{user.email?.split('@')[0]}</span>
