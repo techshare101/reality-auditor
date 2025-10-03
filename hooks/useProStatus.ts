@@ -16,7 +16,13 @@ export function useProStatus(userId?: string) {
       (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          setStatus(data.subscription_status || "free");
+          // Map 'active' subscription_status to 'pro'
+          const subStatus = data.subscription_status;
+          if (subStatus === "active" || subStatus === "pro") {
+            setStatus("pro");
+          } else {
+            setStatus("free");
+          }
         } else {
           setStatus("free");
         }
