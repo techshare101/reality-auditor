@@ -92,7 +92,7 @@ export async function POST(req: Request) {
           subscription_status: plan,
           stripe_subscription_status: subscription.status,
           subscription_updated_at: FieldValue.serverTimestamp(),
-          current_period_end: new Date(subscription.current_period_end * 1000),
+          current_period_end: new Date((subscription as any).current_period_end * 1000),
         });
         
         // Update usage limits
