@@ -39,10 +39,10 @@ import { RealityAudit, AuditRequest } from "@/lib/schemas";
 import CollapsibleText from "@/components/CollapsibleText";
 import ArticleContentCard from "@/components/ArticleContentCard";
 import { useRecentAudits } from "@/hooks/useRecentAudits";
-import { useAuth } from "@/contexts/AuthContext";
-import { useHybridAuditLimit } from "@/hooks/useHybridAuditLimit";
-import { useAuditAccess } from "@/hooks/useAuditAccess";
+import { useAuth } from "@/hooks/useAuth";
 import { useUnifiedAuditAccess } from "@/hooks/useUnifiedAuditAccess";
+import { useHybridAuditLimit } from "@/hooks/useHybridAuditLimit";
+import { useProStatus } from "@/hooks/useProStatus";
 import { buildSources, outletFromDomain, getRegistrableDomain } from "@/lib/outlets";
 import { getWarningLevel, getDynamicWarnings } from '@/lib/warnings';
 import { 
@@ -170,7 +170,11 @@ function getTruthScoreGradient(score: number): string {
 
 export default function RealityAuditorApp({ initialData, demoMode }: { initialData?: any; demoMode?: boolean }) {
   const { user } = useAuth();
-  const { audits_used, isProUser, loading: subscriptionLoading } = useUnifiedAuditAccess();
+  const { audits_used, loading: subscriptionLoading } = useUnifiedAuditAccess();
+  
+  // Use unified Pro status from Firestore
+  const proStatus = useProStatus(user?.uid);
+  const isProUser = proStatus === "pro";
   
   // Derive the missing properties for backward compatibility
   const used = audits_used;
@@ -301,9 +305,12 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
 
   async function onAudit() {
     // Skip limit checks for demo mode and Pro users
-    if (!demoMode && !isProUser) {
-      // Check hard limit only for free users
-      if (showPaywall) {
+    if (!demoMode) {
+      // Pro users bypass all limits
+      if (isProUser) {
+        console.log("✅ Pro user - unlimited audits");
+      } else if (used >= 5) {
+        // Free users hit limit
         console.log(`🚫 Audit limit reached - upgrade to Pro for unlimited audits`);
         setShowUpgradePrompt(true);
         return;
