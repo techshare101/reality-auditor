@@ -503,8 +503,17 @@ const SubscriptionCards = React.memo(function SubscriptionCards() {
             <div className="space-y-4">
               <div>
                 <p className="text-2xl font-bold text-white">
-                  {subscriptionData.auditsLimit} 
-                  <span className="text-lg font-normal text-white/70 ml-1">audits/month</span>
+                  {subscriptionData.planType === 'pro' ? (
+                    <>
+                      <span className="text-green-400">Unlimited</span>
+                      <span className="text-lg font-normal text-white/70 ml-1">audits</span>
+                    </>
+                  ) : (
+                    <>
+                      {subscriptionData.auditsLimit}
+                      <span className="text-lg font-normal text-white/70 ml-1">audits/month</span>
+                    </>
+                  )}
                 </p>
               </div>
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/firebase-admin';
-import { getSubscriptionSummary } from '@/lib/subscription-checker';
+import { checkSubscriptionStatus } from '@/lib/subscription-checker-v2';
 
 // Ensure this route is always dynamically rendered
 export const dynamic = 'force-dynamic';
@@ -40,21 +40,33 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 Getting subscription status for user: ${userId}`);
 
-    // Get comprehensive subscription summary
-    const subscriptionSummary = await getSubscriptionSummary(userId);
+    // Get subscription status from profiles collection
+    const subscriptionStatus = await checkSubscriptionStatus(userId);
 
-    console.log(`✅ Subscription summary for ${userId}:`, {
-      planType: subscriptionSummary.planType,
-      auditsUsed: subscriptionSummary.auditsUsed,
-      auditsRemaining: subscriptionSummary.auditsRemaining,
-      isNearLimit: subscriptionSummary.isNearLimit
-    });
-
-    return NextResponse.json({
-      ...subscriptionSummary,
+    // Map the response to match what SubscriptionCards expects
+    const response = {
+      planType: subscriptionStatus.isPro ? 'pro' : 'free',
+      planDisplayName: subscriptionStatus.isPro ? 'Pro Plan' : 'Free Plan',
+      auditsUsed: subscriptionStatus.audits_used,
+      auditsLimit: subscriptionStatus.audits_limit,
+      auditsRemaining: subscriptionStatus.audits_remaining,
+      usagePercentage: subscriptionStatus.audits_limit > 0 ? 
+        (subscriptionStatus.audits_used / subscriptionStatus.audits_limit) * 100 : 0,
+      isNearLimit: subscriptionStatus.audits_remaining <= Math.ceil(subscriptionStatus.audits_limit * 0.1),
+      isActive: subscriptionStatus.isPro || subscriptionStatus.audits_remaining > 0,
+      subscriptionStatus: subscriptionStatus.isPro ? 'active' : 'free',
       userId,
       timestamp: new Date().toISOString(),
+    };
+
+    console.log(`✅ Subscription summary for ${userId}:`, {
+      planType: response.planType,
+      auditsUsed: response.auditsUsed,
+      auditsRemaining: response.auditsRemaining,
+      isNearLimit: response.isNearLimit
     });
+
+    return NextResponse.json(response);
 
   } catch (error) {
     console.error('❌ Subscription status error:', error);
