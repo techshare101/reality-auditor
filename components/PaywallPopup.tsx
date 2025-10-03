@@ -1,13 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import UpgradeButton from "@/components/UpgradeButton";
 import { 
-  Zap, Clock, TrendingUp, Sparkles, 
-  CreditCard, ArrowUpRight, X 
+  Zap, Clock, TrendingUp, Sparkles, X 
 } from "lucide-react";
-import { useRouter } from "next/navigation";
 
 interface PaywallPopupProps {
   feature?: string;
@@ -15,48 +13,6 @@ interface PaywallPopupProps {
 }
 
 export default function PaywallPopup({ feature = "audit", onClose }: PaywallPopupProps) {
-  const [loading, setLoading] = useState(false);
-  const router = useRouter();
-
-  const handleUpgrade = async () => {
-    setLoading(true);
-    try {
-      // Get the ID token for authenticated checkout
-      const auth = await import("firebase/auth");
-      const { getAuth } = auth;
-      const user = getAuth().currentUser;
-      
-      let headers: HeadersInit = {
-        "Content-Type": "application/json",
-      };
-      
-      if (user) {
-        const idToken = await user.getIdToken();
-        headers["Authorization"] = `Bearer ${idToken}`;
-      }
-
-      const res = await fetch("/api/stripe/checkout", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          priceId: process.env.NEXT_PUBLIC_STRIPE_PRICE_ID
-        }),
-      });
-      
-      const data = await res.json();
-      
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        router.push("/pricing");
-      }
-    } catch (err) {
-      console.error("Upgrade redirect failed:", err);
-      router.push("/pricing");
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <AnimatePresence>
@@ -151,22 +107,10 @@ export default function PaywallPopup({ feature = "audit", onClose }: PaywallPopu
 
           {/* Actions */}
           <div className="flex gap-3">
-            <Button
-              onClick={handleUpgrade}
-              disabled={loading}
-              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all disabled:opacity-50"
+            <UpgradeButton
+              className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all"
               size="lg"
-            >
-              {loading ? (
-                <>Loading...</>
-              ) : (
-                <>
-                  <CreditCard className="w-5 h-5 mr-2" />
-                  Upgrade to Pro
-                  <ArrowUpRight className="w-4 h-4 ml-1" />
-                </>
-              )}
-            </Button>
+            />
             {onClose && (
               <Button
                 onClick={onClose}

@@ -38,6 +38,7 @@ import { AuditBadge } from "@/components/AuditBadge";
 import { RealityAudit, AuditRequest } from "@/lib/schemas";
 import CollapsibleText from "@/components/CollapsibleText";
 import ArticleContentCard from "@/components/ArticleContentCard";
+import UpgradeButton from "@/components/UpgradeButton";
 import { useRecentAudits } from "@/hooks/useRecentAudits";
 import { useAuth } from "@/hooks/useAuth";
 import { useUnifiedAuditAccess } from "@/hooks/useUnifiedAuditAccess";
@@ -1530,27 +1531,10 @@ export default function RealityAuditorApp({ initialData, demoMode }: { initialDa
 
                 {/* Actions */}
                 <div className="flex gap-3">
-                  <Button
-                    onClick={async () => {
-                      try {
-                        const res = await fetch("/api/create-checkout-session", {
-                          method: "POST",
-                        });
-                        const { url } = await res.json();
-                        if (url) {
-                          window.location.href = url; // Direct to Stripe checkout
-                        }
-                      } catch (err) {
-                        console.error("Upgrade redirect failed:", err);
-                      }
-                    }}
+                  <UpgradeButton
                     className="flex-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white border-0 shadow-lg shadow-amber-500/20 hover:shadow-amber-500/30 transition-all"
                     size="lg"
-                  >
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Upgrade Now
-                    <ArrowUpRight className="w-4 h-4 ml-1" />
-                  </Button>
+                  />
                   <Button
                     onClick={() => setShowUpgradePrompt(false)}
                     variant="outline"
