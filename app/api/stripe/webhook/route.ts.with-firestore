@@ -1,0 +1,144 @@
+import { NextResponse } from "next/server";
+import Stripe from "stripe";
+// Uncomment these when ready to add Firestore
+// import { db } from "@/lib/firebase-admin";
+// import { FieldValue } from "firebase-admin/firestore";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+});
+
+export const config = {
+  api: {
+    bodyParser: false, // ❌ disable body parsing, Stripe needs raw
+  },
+};
+
+export async function POST(req: Request) {
+  const sig = req.headers.get("stripe-signature") as string;
+  const body = await req.text();
+
+  try {
+    const event = stripe.webhooks.constructEvent(
+      body,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET!
+    );
+
+    console.log("✅ Stripe event received:", event.type);
+
+    switch (event.type) {
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        console.log("Checkout completed:", session.id);
+        
+        // Get userId from metadata
+        const userId = session.metadata?.userId || session.metadata?.uid;
+        
+        if (userId) {
+          console.log(`Upgrading user ${userId} to Pro`);
+          
+          // TODO: Uncomment when ready to add Firestore
+          // await db.collection("profiles").doc(userId).set({
+          //   subscription_status: "pro",
+          //   stripe_customer_id: session.customer,
+          //   stripe_subscription_id: session.subscription,
+          //   subscription_updated_at: FieldValue.serverTimestamp(),
+          // }, { merge: true });
+          
+          // Also update usage collection
+          // await db.collection("usage").doc(userId).set({
+          //   plan: "pro",
+          //   audit_limit: 100, // or whatever your Pro limit is
+          //   updated_at: FieldValue.serverTimestamp(),
+          // }, { merge: true });
+        }
+        break;
+      }
+      
+      case "customer.subscription.updated":
+      case "customer.subscription.created": {
+        const subscription = event.data.object as Stripe.Subscription;
+        console.log("Subscription updated:", subscription.id);
+        
+        // Find user by customer ID
+        // TODO: Uncomment when ready
+        // const customerDoc = await db.collection("stripe_customers")
+        //   .doc(subscription.customer as string)
+        //   .get();
+        //   
+        // if (customerDoc.exists) {
+        //   const userId = customerDoc.data()?.userId;
+        //   if (userId) {
+        //     const isActive = subscription.status === "active";
+        //     await db.collection("profiles").doc(userId).update({
+        //       subscription_status: isActive ? "pro" : "free",
+        //       stripe_subscription_status: subscription.status,
+        //       subscription_updated_at: FieldValue.serverTimestamp(),
+        //     });
+        //   }
+        // }
+        break;
+      }
+      
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription;
+        console.log("Subscription cancelled:", subscription.id);
+        
+        // Downgrade to free
+        // TODO: Uncomment when ready
+        // const customerDoc = await db.collection("stripe_customers")
+        //   .doc(subscription.customer as string)
+        //   .get();
+        //   
+        // if (customerDoc.exists) {
+        //   const userId = customerDoc.data()?.userId;
+        //   if (userId) {
+        //     await db.collection("profiles").doc(userId).update({
+        //       subscription_status: "free",
+        //       stripe_subscription_status: "cancelled",
+        //       subscription_updated_at: FieldValue.serverTimestamp(),
+        //     });
+        //     
+        //     // Update usage to free plan
+        //     await db.collection("usage").doc(userId).update({
+        //       plan: "free",
+        //       audit_limit: 5, // or whatever your free limit is
+        //     });
+        //   }
+        // }
+        break;
+      }
+      
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        console.log("⚠️ Payment failed for:", invoice.customer);
+        
+        // Optional: Send email or update status
+        // TODO: Uncomment when ready
+        // const customerDoc = await db.collection("stripe_customers")
+        //   .doc(invoice.customer as string)
+        //   .get();
+        //   
+        // if (customerDoc.exists) {
+        //   const userId = customerDoc.data()?.userId;
+        //   if (userId) {
+        //     await db.collection("profiles").doc(userId).update({
+        //       payment_status: "failed",
+        //       last_payment_error: FieldValue.serverTimestamp(),
+        //     });
+        //   }
+        // }
+        break;
+      }
+      
+      default:
+        console.log("Unhandled event:", event.type);
+    }
+
+    return NextResponse.json({ received: true });
+  } catch (err: any) {
+    console.error("❌ Webhook error:", err.message);
+    return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
+  }
+}
